@@ -1,0 +1,49 @@
+## 2026-04-24 — Pre-hackathon planning session
+
+**Context:** Cubist Hackathon starts Fri 5pm. 5 people, each with Claude Pro. ~10–17 working hours. Variants allowed. Judging: Chess Quality / AI Usage / Process & Parallelization / Engineering.
+
+**Research done (via 3 parallel research agents):**
+- Confirmed antichess is a strategic pick: forced captures shrink branching, LLMs are near-zero on antichess (moat for AI-usage axis), python-chess/Fairy-Stockfish/lichess-bot/cutechess-cli all support it natively.
+- 1.e3 proven win for White (Watkins 2016, 4.5GB tree, queryable at Lichess HTTP endpoint).
+- Classical Elo ballparks: random ~800, alpha-beta+eval ~1700–1900, +Watkins +200–400, Fairy-SF ~2900+.
+- Confirmed: Claude Pro ≠ Anthropic API access. Pro includes Claude Code CLI.
+- LLM personas are a legitimate creative angle ("Materialist" persona is literally backwards in antichess = great pitch hook).
+- Tooling: python-chess ships `chess.variant.AntichessBoard` with forced-capture-aware gen; lichess-bot wraps any UCI engine; cutechess-cli supports `-variant antichess -sprt`.
+
+**Two plans now exist:**
+1. User's own plan at `docs/superpowers/plans/2026-04-24-antichess-engine.md` — 13-task TDD, hypothesis-driven experimentation harness, SQLite tournament + notebook as the AI-usage artifact. Roles: Person A (infra: tasks 1,3,4,5,9,10,11), Person B (baseline: 2,6,7,8,13), C/D/E (experimenters).
+2. My plan at `~/.claude/plans/can-we-brainstorm-how-elegant-lightning.md` — 5-lane parallel execution (engine / eval / Lichess bot / web demo / AI glue), with LLM personas at quiet positions, pedagogical narrator, live Lichess bot for judging.
+
+**Reconciliation decision:** pending user input. The user's spec+plan is more rigorous on the "AI Usage" axis (hypothesis-driven tournament); mine is stronger on live-demo surface. Recommendation: execute user's plan as the spine + add Lichess bot + web demo as optional stretch lanes.
+
+**Files created this session:**
+- `~/.claude/plans/can-we-brainstorm-how-elegant-lightning.md` (my plan, for reference)
+
+**Files discovered (user's own prior work):**
+- `docs/superpowers/specs/2026-04-24-antichess-engine-design.md`
+- `docs/superpowers/plans/2026-04-24-antichess-engine.md`
+- `context/deep_research/{chess_engine,antichess,antichess_chatgpt}.md`
+
+**Next action (awaiting user):** pick one plan to execute, or confirm hybrid approach.
+
+---
+
+## 2026-04-24 — Plan merge (option C)
+
+User picked option C — merge both plans. Kept the user's existing TDD structure (Tasks 1–13) unchanged and appended:
+
+- **Updated plan preamble** with a 5-lane role mapping (Person A/B keep existing task splits; C owns LLM persona variant; D owns additional experimenter variants; E owns demo + narrative + review + Lichess bot ops).
+- **Task 14: LLMPersonaEngine variant + Anthropic client** — Claude-Haiku proposes candidate moves, classical code filters to `board.legal_moves`, SQLite FEN cache shared across tournament, token budget cap with offline fallback. Four personas registered: donor / trapper / forced_line / materialist (last one is intentionally backwards — the demo pitch hook). Spec §4 blesses this via "LLM-in-the-loop" variant example.
+- **Task 15: Lichess bot deployment** — fresh account (irreversible upgrade), token via GitHub secret, lichess-bot wrapping `python -m cubist.uci baseline`, tmux runner, casual-first smoke test. Spec §5 blesses this via "optional Lichess bot account."
+- **Updated self-review** to cover new coverage + stretch ordering (Task 14 before Task 15 if time is tight).
+
+Both stretches preserved the spec's non-goals (no web UI, no NNUE, no cloud cluster). Spec untouched.
+
+**Files modified:**
+- `docs/superpowers/plans/2026-04-24-antichess-engine.md` (+~400 lines: preamble role table, Task 14, Task 15, revised self-review)
+
+**Files unchanged:**
+- `docs/superpowers/specs/2026-04-24-antichess-engine-design.md` (already blessed the stretches)
+- `~/.claude/plans/can-we-brainstorm-how-elegant-lightning.md` (my original plan, kept as session reference)
+
+**Next action (awaiting user):** pick execution approach — subagent-driven (recommended, one subagent per task with review gate between) or inline (executing-plans skill, all in this session).

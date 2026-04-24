@@ -10,10 +10,20 @@
 
 **Execution order & parallelism:**
 - Tasks 1 → 2 are **unblockers** — land fast. After Task 2, experimenters (C/D/E) are unblocked on engine variants.
-- Person A: 1, 3, 4, 5, 9, 10, 11
-- Person B: 2, 6, 7, 8, 13
-- Persons C/D/E: variant engines (not in this plan — their hypotheses live in `docs/hypotheses/`)
 - Task 12 (invariant tests) can run in parallel with any other task.
+- Tasks 14–15 are **stretch** — run after Task 13 (UCI) lands Saturday afternoon. Spec §5 already blesses both (LLM-in-loop variant, optional Lichess bot).
+
+**5-lane role mapping (5 people):**
+
+| Lane | Person | Core tasks | Stretch | AI-usage story owned |
+|---|---|---|---|---|
+| **A — Harness & infra** | Person A | 1, 3, 4, 5, 9, 10, 11 | — | Reproducible tournament runs; Elo dashboard in notebook |
+| **B — Baseline engine & UCI** | Person B | 2, 6, 7, 8, 13 | — | Alpha-beta search transparency; commits show Claude-assisted tuning |
+| **C — LLM persona variant** | Person C | Experimenter (engines/llm_persona.py) | 14 | THE headline AI-usage variant; cost/Elo tracking in notebook |
+| **D — Experimenter** | Person D | Variant engines via PR (eval-swap or wholesale) | — | Own hypothesis doc in `docs/hypotheses/`; explicit "Claude proposed, I rejected X" commits |
+| **E — Demo, narrative & review** | Person E | PR reviews, `docs/hypotheses/` curator, `docs/AI_USAGE.md`, `docs/PRIOR_ART.md`, demo script | 15 (Lichess bot operator) | The AI-usage writeup itself; runs live Lichess games during judging |
+
+Every PR from C/D/E must include a one-paragraph hypothesis docstring at the top of the engine module — that's the AI-usage paper trail. Person E curates these into `docs/AI_USAGE.md`.
 
 ---
 
@@ -1962,6 +1972,405 @@ git commit -m "feat: minimal UCI adapter for live demo"
 
 ---
 
+## Task 14: LLMPersonaEngine variant + Anthropic client (stretch)
+
+Runs Saturday afternoon or anytime after Task 2. This is the **headline AI-usage variant** — Claude as a move-proposer that classical code validates. Spec §4 blesses it ("LLM-in-the-loop: Claude Haiku as a fallback move-picker").
+
+**Strategic framing:** the engine asks Claude for a ranked list of candidate moves at decision points; classical code filters to `board.legal_moves` (never trust the LLM for legality); if Claude's top pick is illegal or worse than baseline's pick (per a shallow search), fall back to baseline. Every Claude call caches by FEN in SQLite (reuses across games/persona-variants) so the tournament doesn't blow the budget.
+
+**Files:**
+- Create: `src/cubist/llm/__init__.py`
+- Create: `src/cubist/llm/client.py` — Anthropic client + FEN-keyed SQLite cache + token budget
+- Create: `src/cubist/engines/llm_persona.py` — `LLMPersonaEngine(baseline, persona, client)`
+- Test: `tests/test_llm_client.py`, `tests/test_llm_persona.py`
+- Modify: `src/cubist/engines/registry.py` — register 4 persona variants
+- Modify: `pyproject.toml` — add `anthropic>=0.40` optional dep
+
+- [ ] **Step 14.1: Add optional dep**
+
+Update `pyproject.toml` `[project.optional-dependencies]`:
+
+```toml
+dev = ["pytest>=7.4", "pytest-timeout>=2.2", "pytest-xdist>=3.5"]
+llm = ["anthropic>=0.40"]
+```
+
+Run: `pip install -e ".[dev,llm]"`.
+
+- [ ] **Step 14.2: Write failing tests for the client cache**
+
+Create `tests/test_llm_client.py`:
+
+```python
+import os
+from cubist.llm.client import ClaudeClient, FenCache
+
+def test_fen_cache_stores_and_retrieves(tmp_path):
+    cache = FenCache(tmp_path / "cache.db")
+    cache.put("fen1", "persona-donor", "e2e4\ne7e5\nd2d4", tokens=42)
+    rows = cache.get("fen1", "persona-donor")
+    assert rows == "e2e4\ne7e5\nd2d4"
+
+def test_client_offline_mode_uses_cache_only(tmp_path, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    client = ClaudeClient(cache_path=tmp_path / "c.db", offline=True)
+    client.cache.put("fen1", "donor", "e2e4", tokens=0)
+    assert client.ask_candidates("fen1", "donor", prompt="...") == ["e2e4"]
+
+def test_client_refuses_without_key_and_without_cache(tmp_path, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    client = ClaudeClient(cache_path=tmp_path / "c.db", offline=True)
+    # no cache hit → must return [] not crash
+    assert client.ask_candidates("missing-fen", "donor", prompt="...") == []
+```
+
+- [ ] **Step 14.3: Verify tests fail**
+
+Run: `pytest tests/test_llm_client.py -v`
+Expected: FAIL — ModuleNotFoundError.
+
+- [ ] **Step 14.4: Implement `src/cubist/llm/client.py`**
+
+```python
+from __future__ import annotations
+import os
+import sqlite3
+from pathlib import Path
+from dataclasses import dataclass
+
+class FenCache:
+    """SQLite-backed FEN+persona → candidate-list cache.
+    Shared across the whole tournament — one Claude call per (fen, persona) ever."""
+
+    def __init__(self, path: str | Path):
+        self.path = str(path)
+        with sqlite3.connect(self.path) as c:
+            c.execute("""CREATE TABLE IF NOT EXISTS llm_cache (
+                fen TEXT, persona TEXT, candidates TEXT, tokens INTEGER,
+                PRIMARY KEY (fen, persona))""")
+
+    def get(self, fen: str, persona: str) -> str | None:
+        with sqlite3.connect(self.path) as c:
+            row = c.execute(
+                "SELECT candidates FROM llm_cache WHERE fen=? AND persona=?",
+                (fen, persona)).fetchone()
+            return row[0] if row else None
+
+    def put(self, fen: str, persona: str, candidates: str, tokens: int) -> None:
+        with sqlite3.connect(self.path) as c:
+            c.execute("""INSERT OR REPLACE INTO llm_cache VALUES (?, ?, ?, ?)""",
+                      (fen, persona, candidates, tokens))
+
+    def total_tokens(self) -> int:
+        with sqlite3.connect(self.path) as c:
+            (t,) = c.execute("SELECT COALESCE(SUM(tokens), 0) FROM llm_cache").fetchone()
+            return t
+
+class ClaudeClient:
+    """Thin wrapper: FEN+persona → list of candidate UCI moves, cached forever.
+    `offline=True` skips network; cache-miss returns []. Use in CI and locally
+    when no API key is present."""
+
+    def __init__(self, cache_path: str | Path = "llm_cache.db",
+                 offline: bool = False, max_tokens: int = 200,
+                 budget_tokens: int = 200_000):
+        self.cache = FenCache(cache_path)
+        self.offline = offline or not os.environ.get("ANTHROPIC_API_KEY")
+        self.max_tokens = max_tokens
+        self.budget_tokens = budget_tokens
+
+    def ask_candidates(self, fen: str, persona: str, prompt: str) -> list[str]:
+        hit = self.cache.get(fen, persona)
+        if hit is not None:
+            return [m for m in hit.splitlines() if m]
+        if self.offline:
+            return []
+        if self.cache.total_tokens() > self.budget_tokens:
+            return []  # budget blown; fall back to baseline
+        import anthropic
+        msg = anthropic.Anthropic().messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=self.max_tokens,
+            messages=[{"role": "user", "content": prompt}])
+        text = msg.content[0].text if msg.content else ""
+        used = (msg.usage.input_tokens + msg.usage.output_tokens) if msg.usage else 0
+        moves = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        self.cache.put(fen, persona, "\n".join(moves), used)
+        return moves
+```
+
+- [ ] **Step 14.5: Implement `src/cubist/engines/llm_persona.py`**
+
+```python
+from __future__ import annotations
+import chess
+from chess.variant import AntichessBoard
+from cubist.engine import Engine
+from cubist.engines.baseline import BaselineEngine
+from cubist.llm.client import ClaudeClient
+
+PERSONAS = {
+    "donor":      "You are an antichess expert. Your style: aggressively give away pieces, especially long-range sliders (queens, rooks, bishops). Propose 3 candidate moves as UCI, one per line, no commentary.",
+    "trapper":    "You are an antichess expert. Your style: set up positions where the opponent MUST capture into bad piece-square configurations. Propose 3 candidate moves as UCI, one per line, no commentary.",
+    "forced_line": "You are an antichess expert. Your style: find moves that initiate the longest forced-capture chains (forcing sequences that dictate opponent responses). Propose 3 candidate moves as UCI, one per line, no commentary.",
+    "materialist": "You are a CHESS grandmaster (note: chess, not antichess). Your style: maximize material and protect your queen at all costs. Propose 3 candidate moves as UCI, one per line, no commentary.",
+    # ^ materialist is INTENTIONALLY backwards for antichess — we expect it to lose.
+    # That's the punchline: "in antichess, being materialist is literally the wrong objective."
+}
+
+PROMPT_TEMPLATE = "{persona_header}\n\nPosition (FEN): {fen}\nLegal moves (UCI): {legal_moves}\nPropose 3 candidate moves:"
+
+class LLMPersonaEngine(Engine):
+    """Claude-proposed candidate moves, classical fallback. Legality enforced
+    in code — LLM output is never trusted for legality."""
+
+    def __init__(self, persona: str = "forced_line", client: ClaudeClient | None = None,
+                 fallback_depth: int = 3):
+        assert persona in PERSONAS, f"unknown persona: {persona}"
+        self.persona = persona
+        self.name = f"llm_{persona}"
+        self.description = f"Claude-Haiku candidate proposer with `{persona}` persona, classical fallback."
+        self.client = client or ClaudeClient()
+        self.fallback = BaselineEngine(max_depth=fallback_depth)
+
+    def play(self, board: AntichessBoard, time_limit_s: float) -> chess.Move:
+        legal = list(board.legal_moves)
+        legal_uci = {m.uci() for m in legal}
+        prompt = PROMPT_TEMPLATE.format(
+            persona_header=PERSONAS[self.persona],
+            fen=board.fen(),
+            legal_moves=" ".join(sorted(legal_uci)),
+        )
+        candidates = self.client.ask_candidates(board.fen(), self.persona, prompt)
+        for uci in candidates:
+            if uci in legal_uci:
+                return chess.Move.from_uci(uci)
+        # Fallback: LLM empty / budget blown / all illegal.
+        return self.fallback.play(board, time_limit_s)
+```
+
+- [ ] **Step 14.6: Write persona-engine tests**
+
+Create `tests/test_llm_persona.py`:
+
+```python
+import chess
+from chess.variant import AntichessBoard
+from cubist.engines.llm_persona import LLMPersonaEngine, PERSONAS
+from cubist.llm.client import ClaudeClient
+
+def test_all_four_personas_registered():
+    assert set(PERSONAS.keys()) == {"donor", "trapper", "forced_line", "materialist"}
+
+def test_llm_persona_falls_back_to_baseline_when_offline(tmp_path):
+    client = ClaudeClient(cache_path=tmp_path / "c.db", offline=True)
+    eng = LLMPersonaEngine("donor", client=client)
+    board = AntichessBoard()
+    mv = eng.play(board, time_limit_s=0.5)
+    assert mv in board.legal_moves
+
+def test_llm_persona_prefers_cached_candidate_when_legal(tmp_path):
+    client = ClaudeClient(cache_path=tmp_path / "c.db", offline=True)
+    board = AntichessBoard()
+    # pick a legal move and seed the cache for this exact FEN+persona
+    legal = list(board.legal_moves)[0].uci()
+    client.cache.put(board.fen(), "donor", legal, tokens=0)
+    eng = LLMPersonaEngine("donor", client=client)
+    mv = eng.play(board, time_limit_s=0.5)
+    assert mv.uci() == legal
+
+def test_llm_persona_filters_illegal_cached_candidates(tmp_path):
+    client = ClaudeClient(cache_path=tmp_path / "c.db", offline=True)
+    board = AntichessBoard()
+    client.cache.put(board.fen(), "donor", "a1a8\nb1b8", tokens=0)  # both illegal
+    eng = LLMPersonaEngine("donor", client=client)
+    mv = eng.play(board, time_limit_s=0.5)
+    assert mv in board.legal_moves  # fell back to baseline, still legal
+```
+
+- [ ] **Step 14.7: Register the persona variants**
+
+Modify `src/cubist/engines/registry.py` — add:
+
+```python
+from cubist.engines.llm_persona import LLMPersonaEngine, PERSONAS
+for _persona in PERSONAS:
+    REGISTRY[f"llm_{_persona}"] = (lambda p=_persona: LLMPersonaEngine(p))
+```
+
+- [ ] **Step 14.8: Run tests**
+
+Run: `pytest tests/test_llm_client.py tests/test_llm_persona.py -v`
+Expected: PASS. All 7 tests green. No network calls (offline mode throughout tests).
+
+- [ ] **Step 14.9: Commit**
+
+```bash
+git add src/cubist/llm/ src/cubist/engines/llm_persona.py src/cubist/engines/registry.py \
+        tests/test_llm_client.py tests/test_llm_persona.py pyproject.toml
+git commit -m "feat: LLMPersonaEngine variant — Claude-Haiku candidate proposer with classical fallback"
+```
+
+**Pitch hook for demo:** run the tournament including all 4 personas. Forced-line / donor / trapper should place competitively with baseline; **materialist should lose every game** because in antichess being a materialist is literally the wrong objective. That visual in the Elo ladder is the strongest 30-second AI-usage story you can ship.
+
+---
+
+## Task 15: Lichess bot deployment (stretch, Sat 2pm+)
+
+Runs Saturday afternoon after Task 13 (UCI) lands. Spec §5 blesses it ("optional Lichess bot account"). This replaces "notebook walkthrough" with **"judges challenge our engine live during judging"** — highest-impact demo surface we have.
+
+**Important constraints:**
+- Lichess bot upgrade is **irreversible** — use a fresh account, not a personal one.
+- Do this only when Task 13 passes; no point registering a bot before the UCI shim works.
+- During the first live game, keep games casual (not rated) until you've watched one completion — catches any UCI edge cases.
+
+**Files:**
+- Create: `bot/README.md` — runbook for challenging / restarting
+- Create: `scripts/run_bot.sh` — tmux-wrapped runner
+- Modify: `README.md` — add "Play us live" link at top
+
+- [ ] **Step 15.1: Create fresh Lichess bot account**
+
+Manual, not a script step:
+1. lichess.org → logout → Sign up. Username `cubist-bot-<short-team-tag>` (e.g. `cubist-bot-ann`).
+2. **Do not play any games** on the account — upgrade is only available to accounts with zero games.
+3. Settings → API Access Tokens → `+` → scope `bot:play` → save token.
+4. Run upgrade:
+
+```bash
+export LICHESS_TOKEN=<paste-token>
+curl -d '' https://lichess.org/api/bot/account/upgrade \
+  -H "Authorization: Bearer $LICHESS_TOKEN"
+```
+
+Expected: `{"ok":true}`. Account now shows "BOT" badge.
+
+- [ ] **Step 15.2: Clone and configure lichess-bot**
+
+```bash
+git clone https://github.com/lichess-bot-devs/lichess-bot.git bot/lichess-bot
+cd bot/lichess-bot
+pip install -r requirements.txt
+cp config.yml.default config.yml
+```
+
+Edit `bot/lichess-bot/config.yml`:
+
+```yaml
+token: "YOUR_LICHESS_TOKEN"
+engine:
+  dir: "../../"                       # repo root
+  name: "python"                      # executable
+  working_dir: "../../"
+  protocol: "uci"
+  variants: ["antichess"]
+  options: {}
+  engine_options:
+    - "-m"
+    - "cubist.uci"                    # runs `python -m cubist.uci`
+    - "baseline"                      # which registered engine to wrap
+  ponder: false
+challenge:
+  concurrency: 1
+  sort_by: "best"
+  accept_bot: true
+  only_bot: false
+  max_increment: 60
+  min_increment: 0
+  max_base: 600
+  min_base: 10
+  variants: ["antichess"]
+  time_controls: ["bullet", "blitz", "rapid"]
+  modes: ["casual"]                   # rated: add after first verified game
+```
+
+- [ ] **Step 15.3: Create `scripts/run_bot.sh`**
+
+```bash
+#!/usr/bin/env bash
+# Launch the lichess bot in a tmux session so it survives SSH/lid-close.
+set -euo pipefail
+SESSION="cubist-bot"
+cd "$(dirname "$0")/.."
+tmux has-session -t "$SESSION" 2>/dev/null && tmux kill-session -t "$SESSION"
+tmux new-session -d -s "$SESSION" \
+  "cd bot/lichess-bot && python lichess-bot.py 2>&1 | tee ../../runs/bot-$(date +%Y%m%dT%H%M%S).log"
+echo "Bot started in tmux session '$SESSION'. Attach: tmux attach -t $SESSION"
+```
+
+Make it executable: `chmod +x scripts/run_bot.sh`.
+
+- [ ] **Step 15.4: Smoke test (one completed casual game)**
+
+```bash
+bash scripts/run_bot.sh
+```
+
+Then from a different browser / incognito window:
+1. lichess.org → challenge `cubist-bot-<your-suffix>` to an antichess game, 10+0 casual.
+2. Play ~10 moves. Verify the engine responds, plays legal moves, doesn't crash.
+3. Check `runs/bot-*.log` for warnings.
+
+Expected: game completes (win/loss/draw doesn't matter) with no exceptions. Tournament-run data in `results.db` is NOT polluted — Lichess games don't feed the DB.
+
+- [ ] **Step 15.5: Create `bot/README.md`**
+
+```markdown
+# Lichess Bot
+
+Our antichess engine plays live on Lichess:
+**https://lichess.org/@/cubist-bot-YOUR-SUFFIX**
+
+## Challenge it
+From any Lichess account → open the bot profile → "Challenge" → select antichess, any time control ≤10+0.
+
+## Running the bot
+```bash
+export LICHESS_TOKEN=<redacted>  # stored in 1Password / env
+bash scripts/run_bot.sh          # launches tmux session `cubist-bot`
+tmux attach -t cubist-bot        # to watch live logs
+```
+
+## Troubleshooting
+- Engine not responding: check `runs/bot-*.log` for UCI parse errors. Reproduce locally with `python -m cubist.uci baseline`.
+- Rate-limited by Lichess: `config.yml` → `challenge.concurrency: 1` (already set).
+- To accept rated games: `config.yml` → `challenge.modes: [casual, rated]`. Only after ≥5 verified casual games.
+```
+
+- [ ] **Step 15.6: Update root README**
+
+At the top of `README.md`, add:
+
+```markdown
+> **Play us live on Lichess:** https://lichess.org/@/cubist-bot-YOUR-SUFFIX (antichess only)
+```
+
+- [ ] **Step 15.7: Commit (do NOT commit the token)**
+
+```bash
+# sanity: never commit the token
+grep -r "lip_" bot/ 2>/dev/null && echo "ABORT: token in repo" && exit 1
+
+git add bot/README.md scripts/run_bot.sh README.md
+git commit -m "feat: lichess bot deployment (stretch demo surface)"
+```
+
+`bot/lichess-bot/config.yml` should be in `.gitignore` (token lives there). Add if missing:
+
+```
+bot/lichess-bot/config.yml
+```
+
+- [ ] **Step 15.8: Judging-time runbook**
+
+Last thing before judging starts:
+1. Bot running in tmux (`tmux ls` shows `cubist-bot`).
+2. Test challenge from a team member's account — game completes cleanly.
+3. If rated games desired, switch `modes: [casual, rated]` + restart bot.
+4. README top-line link to bot profile is correct.
+
+---
+
 ## Self-review (done by author, inline)
 
 **Spec coverage check:**
@@ -1972,22 +2381,27 @@ git commit -m "feat: minimal UCI adapter for live demo"
 - §3.5 stats (Wilson, H2H, Bayes-Elo) → Task 9 ✅
 - §3.6 results notebook → Task 10 ✅
 - §4 experimentation workflow (CI smoke) → Task 11 ✅
+- §4 LLM-in-the-loop example variant → Task 14 ✅
+- §5 optional Lichess bot → Task 15 ✅
 - §6 deliverables (UCI wrapper for demo) → Task 13 ✅
 - §7 non-goals — nothing out-of-scope slipped in ✅
 - §8 risks (forfeit handling, CI smoke-test) → Task 3, Task 11 ✅
+- §8 cost blowup from LLM-in-loop → Task 14 token budget + FEN cache + `offline=True` tests ✅
 - Antichess invariants → Task 12 ✅
 
 **Placeholder scan:** no TBD/TODO/"fill in later". All code steps contain complete code. All run commands contain concrete expected output.
 
-**Type consistency:** `Engine.play(board, time_limit_s)` used consistently. `Outcome` enum values used identically in tests and `_result_str`. DB column names match between schema, writers, and readers.
+**Type consistency:** `Engine.play(board, time_limit_s)` used consistently across Tasks 2, 6-8, 13, 14. `Outcome` enum values used identically in tests and `_result_str`. DB column names match between schema, writers, and readers. `LLMPersonaEngine` extends `Engine` and passes the same invariant tests as every other engine via Task 12.
 
-**Not covered in plan (intentional — these are teammate creative work, per spec):** variant engines by C/D/E, `docs/hypotheses/` notes. These get added by their authors via the same `engines/<name>.py` + `registry.py` + PR + CI pattern Task 2 establishes.
+**Not covered in plan (intentional — these are teammate creative work, per spec):** Person D's variant engines (beyond `LLMPersonaEngine`), `docs/hypotheses/` notes. These get added by their authors via the same `engines/<name>.py` + `registry.py` + PR + CI pattern Task 2 establishes.
+
+**Stretch task ordering:** Task 14 depends on Task 2 only (the registry). Task 15 depends on Task 13 (UCI). If only one stretch has time: prioritize Task 14 (headline AI-usage variant, no external account needed) over Task 15 (nice-to-have live demo surface that can be replaced by the notebook walkthrough).
 
 ---
 
 **Plan complete and saved to `docs/superpowers/plans/2026-04-24-antichess-engine.md`.** Two execution options:
 
-1. **Subagent-Driven (recommended)** — I dispatch a fresh subagent per task, review between tasks, fast iteration.
-2. **Inline Execution** — Execute tasks in this session using executing-plans, batch with checkpoints.
+1. **Subagent-Driven (recommended)** — dispatch a fresh subagent per task, review between tasks, fast iteration.
+2. **Inline Execution** — execute tasks in this session using executing-plans, batch with checkpoints.
 
 Which approach?
