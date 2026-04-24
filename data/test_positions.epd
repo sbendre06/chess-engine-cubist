@@ -1,0 +1,6 @@
+# EPD lines for tactics / regression (Person 3 & 4).
+# Format: FEN-like EPD fields; add "bm" best moves when curated.
+#
+# Example placeholders (replace with real antichess positions):
+# rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+#
