@@ -1,0 +1,145 @@
+Event theme
+
+This year we’re exploring how developers work alongside AI
+
+Each team member receives an individual Claude Pro subscription for the event.
+
+Schedule
+Friday
+
+5:00 pm — Doors open, intro presentation
+Meet & greet with Cubist quants and developers
+Development begins
+11 pm — Break for the night
+
+Saturday
+
+11:00 am — Doors reopen
+3:00 pm — Judging
+Deliberations / Awards
+
+Goals
+
+Build a chess engine from scratch or on top of existing foundations.
+
+We want to see something:
+
+cool
+open source
+well-engineered
+
+We’re not only judging the chess engine itself.
+We’re judging how your team used AI to build it.
+
+Rules & logistics
+
+Teams of 4–5 students
+
+Each participant receives an individual Claude Pro subscription.
+
+We deliberately chose per-person subscriptions — not a single shared one.
+
+AI costs are rising — efficiency and parallelization matter.
+
+AI tooling
+
+Each participant receives an individual Claude Pro subscription.
+
+Local AI models and free-tier models via GitHub Copilot are also encouraged.
+
+Each team member has their own subscription — use them in parallel.
+
+Tools mentioned:
+
+Tool/resource	Notes
+claude.ai	Claude Pro
+python-chess.readthedocs.io	python-chess
+education.github.com/pack	GitHub Education Pack
+Google Gemini for Students	ChatGPT for students
+Cursor student discount	
+Code / Hosting & Demo
+
+All code must be public on GitHub by judging time.
+
+A working demo, notebook of results, or engine-in-action is sufficient.
+
+No polished slide deck required.
+
+Demo can be:
+
+notebook, CLI match, web UI — whatever shows the engine working
+
+GitHub public repo is required.
+
+Chess interfaces & protocols
+
+Universal Chess Interface (UCI)
+en.wikipedia.org/wiki/Universal_Chess_Interface
+
+python-chess
+python-chess.readthedocs.io
+
+Stockfish reference engine
+stockfishchess.org
+
+Lichess open-source ecosystem
+github.com/lichess-org
+
+You may use any language or framework:
+
+Python, Rust, C++, TypeScript — your call.
+
+Existing chess libraries are allowed and encouraged as foundations.
+
+Criteria
+
+The broad criteria shown:
+
+Creativity
+Rigor
+Ingenuity
+Engineering
+
+More concretely, the judging categories appear to be:
+
+1. Chess Engine Quality
+
+Does it play legal, strategic chess?
+
+Correctness matters, but perfection is not the bar.
+
+2. AI Usage
+
+How did your team use Claude?
+
+Did you critically evaluate and iterate on AI-generated code?
+
+Did you run experiments — e.g. pitting two AI-generated engines against each other?
+
+Did you think about cost and efficiency — getting more out of each prompt, using local/free models where appropriate?
+
+3. Process & Parallelization
+
+Did you divide work intelligently across team members and AI accounts?
+
+Evidence of parallel workstreams, code review, integration.
+
+4. Engineering Quality
+
+Documentation: README, docstrings, comments.
+
+Testing: unit tests, perf tests, self-play benchmarks.
+
+Research of prior art: existing engines, papers, the UCI protocol.
+
+Example judging table
+Team	Quality	AI	Process	Engineering
+Team 1	2	3	4	3
+Team 2	1	5	4	2
+etc				
+Prizes per person
+
+🥇 1st place — $2,500 scholarship
+🥈 2nd place — $1,500 scholarship
+🥉 3rd place — $1,000 scholarship
+
