@@ -139,3 +139,33 @@ Rough timeline:
   every line.
 - Manual `/cost` entry for tokens is the right starting point; only
   invest in transcript parsing if cost-of-friction becomes real.
+
+---
+
+## Session: noarch_nostrat_yesplan
+
+**Date:** 2026-04-25
+**Operator:** Claude Sonnet 4.6
+**Goal:** Build an Antichess engine with plan-guided design but no architecture docs and no strategy hints
+
+### Token usage
+- Input tokens: 20438
+- Output tokens: 3105
+
+### Wall-clock time
+- Total elapsed: 43 minutes
+
+### Human interventions
+- Count: 1
+- Notes: User provided Antichess rules inline; no other corrections needed
+
+### Bugs and issues fixed
+1. venv not present on branch — recreated with `uv venv --python 3.13` and installed python-chess
+2. Initial test showed only depth-1 info line — root cause was `quit` arriving before search thread completed; confirmed normal with `go movetime 3000` test (depths 1-4 all completed)
+
+### Outcome
+Landed `engines/noarch_nostrat_yesplan.py` with:
+- `get_pseudo_legal_moves`: delegates to `board.legal_moves` (mandatory captures enforced)
+- `evaluate_board`: -own_material + ½ bonus per piece attacked by opponent
+- `order_moves`: captures-that-expose-our-piece first, then other captures, then exposure non-captures
+Engine searches depth 4 in ~1.2s from starting position (~10k nodes). Next: run tournament vs baseline.
