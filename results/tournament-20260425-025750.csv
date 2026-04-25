@@ -1,0 +1,10 @@
+engine,prompt_name,components,games,wins,draws,losses,score,elo_vs_baseline,elo_ci_low,elo_ci_high,input_tokens,output_tokens,total_tokens,elapsed_s,elo_per_1k_tokens,avg_plies,avg_game_seconds
+arch1-strat1-plan1,arch1-strat1-plan1,(no tokens.csv found),20,10,10,0,0.75,190.8,42.1,477.3,0,0,0,0.0,,72,3.1
+caveman,caveman,full-ablation-arch+strat+plan,20,0,0,20,0.0,,-2400.0,-2543.3,10842,3216,14058,900.0,,88.5,8.8
+noarch_nostrat_noplan,noarch_nostrat_noplan,(no tokens.csv found),20,0,0,20,0.0,,-2400.0,-2543.3,0,0,0,0.0,,157.5,40.74
+noarch_nostrat_yesplan,noarch_nostrat_yesplan,"no-arch,no-strat,yes-plan",20,10,0,10,0.5,-0.0,-163.3,163.3,20438,3105,23543,2580.0,-0.0,149,31.13
+noarch_yesstrat_noplan,noarch_yesstrat_noplan,(no tokens.csv found),20,10,10,0,0.75,190.8,42.1,477.3,0,0,0,0.0,,181,46.74
+yesarch-nostrat-yesplan,yesarch-nostrat-yesplan,arch+plan ablation — update from /cost before commit,20,0,10,10,0.25,-190.8,-477.3,-42.1,0,0,0,0.0,,48.5,8.94
+yesarch_nostrat_noplan,yesarch_nostrat_noplan,arch_only,20,0,20,0,0.5,-0.0,-163.3,163.3,80000,2000,82000,900.0,-0.0,110.5,35.08
+yesarch_yesstrat_yesplan_p1,yesarch_yesstrat_yesplan_p1,yesarch+yesstrat+yesplan,20,20,0,0,1.0,,2543.3,2400.0,5000,39000,44000,1003.0,,165.5,38.13
+yesarch_yessttrat_noplan,yesarch_yessttrat_noplan,yesarch-yesstrat-noplan,20,0,20,0,0.5,-0.0,-163.3,163.3,10527,2134,12661,1200.0,-0.0,59.5,16.12
