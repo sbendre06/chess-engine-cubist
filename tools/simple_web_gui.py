@@ -68,16 +68,59 @@ HTML = """<!doctype html>
   <style>
     body { font-family: system-ui, sans-serif; margin: 20px; }
     #layout { display: flex; gap: 28px; align-items: flex-start; }
-    #board { display: grid; grid-template-columns: repeat(8, 56px); width: 448px; border: 1px solid #333; }
-    .sq { width: 56px; height: 56px; border: none; font-size: 34px; cursor: pointer; }
+
+    /* Board frame */
+    #board-wrap { display: flex; align-items: flex-start; gap: 6px; }
+    #rank-labels {
+      display: flex; flex-direction: column; justify-content: space-around;
+      height: 512px; font-size: 12px; color: #888; user-select: none;
+      padding-right: 2px;
+    }
+    #board-col { display: flex; flex-direction: column; gap: 4px; }
+    #board {
+      display: grid; grid-template-columns: repeat(8, 64px);
+      width: 512px;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+      border: 2px solid #555;
+    }
+    #file-labels {
+      display: flex; justify-content: space-around;
+      font-size: 12px; color: #888; user-select: none;
+    }
+
+    /* Squares */
+    .sq {
+      width: 64px; height: 64px; border: none; padding: 0;
+      cursor: pointer; position: relative;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .sq:focus { outline: none; }
     .light { background: #f0d9b5; }
-    .dark { background: #b58863; }
-    .selected { outline: 3px solid #f6e27f; }
-    .target { outline: 3px solid #8bd17c; }
+    .dark  { background: #b58863; }
+    .selected.light { background: #f6f669; }
+    .selected.dark  { background: #baca2b; }
+
+    /* Pieces */
+    .piece-img { width: 100%; height: 100%; pointer-events: none; user-select: none; display: block; }
+
+    /* Legal move indicators */
+    .dot-overlay {
+      position: absolute; width: 32%; height: 32%;
+      border-radius: 50%; background: rgba(0,0,0,0.2);
+      pointer-events: none; z-index: 1;
+    }
+    .ring-overlay {
+      position: absolute; inset: 0; border-radius: 50%;
+      border: 7px solid rgba(0,0,0,0.2);
+      pointer-events: none; z-index: 1; box-sizing: border-box;
+    }
+
     #status { margin: 12px 0; min-height: 24px; font-size: 14px; }
-    #controls { margin-top: 12px; }
+    #controls { margin-top: 10px; }
     .ctrl-btn { padding: 8px 12px; margin-right: 8px; }
     .small { color: #666; font-size: 13px; margin-top: 8px; }
+
+    /* Engine panel */
     #engine-panel { min-width: 210px; }
     #engine-panel h3 { margin: 0 0 10px 0; font-size: 15px; color: #333; border-bottom: 1px solid #ddd; padding-bottom: 6px; }
     .engine-card {
@@ -100,7 +143,19 @@ HTML = """<!doctype html>
   <div id="layout">
     <div>
       <div id="status"></div>
-      <div id="board"></div>
+      <div id="board-wrap">
+        <div id="rank-labels">
+          <span>8</span><span>7</span><span>6</span><span>5</span>
+          <span>4</span><span>3</span><span>2</span><span>1</span>
+        </div>
+        <div id="board-col">
+          <div id="board"></div>
+          <div id="file-labels">
+            <span>a</span><span>b</span><span>c</span><span>d</span>
+            <span>e</span><span>f</span><span>g</span><span>h</span>
+          </div>
+        </div>
+      </div>
       <div id="controls">
         <button class="ctrl-btn" id="newGameBtn">New Game</button>
         <button class="ctrl-btn" id="refreshBtn">Refresh</button>
@@ -117,6 +172,12 @@ HTML = """<!doctype html>
   <script>
     const ENGINES = __ENGINES_JSON__;
     let activeEngine = "__ACTIVE_ENGINE__";
+
+    const PIECE_BASE = "https://cdn.jsdelivr.net/gh/lichess-org/lila@master/public/piece/maestro/";
+    function pieceImgUrl(piece) {
+      const c = piece.color === "white" ? "w" : "b";
+      return PIECE_BASE + c + piece.symbol.toUpperCase() + ".svg";
+    }
 
     const boardEl = document.getElementById("board");
     const statusEl = document.getElementById("status");
@@ -241,11 +302,26 @@ HTML = """<!doctype html>
           const sq = indexToSquare(idx);
           const piece = current.board[idx];
           const isLight = (file + rank) % 2 === 1;
+          const isTarget = targets.has(sq);
+
           const btn = document.createElement("button");
           btn.className = "sq " + (isLight ? "light" : "dark");
           if (selected === sq) btn.classList.add("selected");
-          if (targets.has(sq)) btn.classList.add("target");
-          btn.textContent = piece ? piece.unicode : "";
+
+          if (piece) {
+            const img = document.createElement("img");
+            img.src = pieceImgUrl(piece);
+            img.className = "piece-img";
+            img.draggable = false;
+            btn.appendChild(img);
+          }
+
+          if (isTarget) {
+            const overlay = document.createElement("div");
+            overlay.className = piece ? "ring-overlay" : "dot-overlay";
+            btn.appendChild(overlay);
+          }
+
           btn.onclick = () => clickSquare(sq);
           boardEl.appendChild(btn);
         }
