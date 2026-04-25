@@ -15,14 +15,27 @@ the source of the expected move(s). All FENs use chess.variant.AntichessBoard
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
+
+
+Tier1Rule = Literal[
+    "move_gen_superset",      # engine output (filtered) must equal board.legal_moves
+    "legal_moves_exact",      # engine output (filtered) must equal an explicit set
+    "contains_moves",         # engine pseudo-legal output must include certain UCIs
+    "excludes_moves",         # engine pseudo-legal output must not include certain UCIs
+    "eval_winning",           # evaluate_board(board) >= expected.min_score
+    "eval_losing",            # evaluate_board(board) <= expected.max_score
+    "terminal_winner",        # board.outcome().winner == expected.winner_color
+    "not_terminal",           # board.is_game_over() must be False
+]
 
 
 @dataclass(frozen=True)
 class Tier1Fixture:
     test_id: str
     fen: str
-    rule: str
-    expected: dict  # rule-specific payload (see correctness.py for keys per rule)
+    rule: Tier1Rule
+    expected: dict
     note: str
 
 
@@ -30,13 +43,14 @@ class Tier1Fixture:
 class Tier2Fixture:
     test_id: str
     fen: str
-    expected_moves: frozenset  # UCI strings; engine's chosen move must be in this set
+    expected_moves: frozenset
     depth: int
     source: str
     note: str
 
 
 TIER1_FIXTURES: list[Tier1Fixture] = [
+    # --- move generation ---
     Tier1Fixture(
         test_id="move_gen_completeness_startpos",
         fen="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
@@ -45,18 +59,25 @@ TIER1_FIXTURES: list[Tier1Fixture] = [
         note="Engine's pseudo-legal output, when filtered through board.legal_moves, must equal the legal set. No legal moves dropped.",
     ),
     Tier1Fixture(
-        test_id="forced_capture_recognized",
+        test_id="forced_capture_exact_set",
         fen="4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1",
-        rule="contains_moves",
-        expected={"required_uci": ["e4d5"]},
-        note="Single capture (exd5) available among many quiet moves. Engine's pseudo-legal set must include the capture.",
+        rule="legal_moves_exact",
+        expected={"legal_uci": ["e4d5"]},
+        note="One capture (exd5) among many quiet moves. Forced-capture rule eliminates all quiet moves. Engine's filtered pseudo-legal set must equal {e4d5} -- no quiet move pollution.",
     ),
     Tier1Fixture(
-        test_id="multi_capture_choice",
+        test_id="multi_capture_exact_set",
         fen="4k3/8/8/8/p3Q2p/8/8/4K3 w - - 0 1",
-        rule="contains_moves",
-        expected={"required_uci": ["e4a4", "e4h4", "e4e8"]},
-        note="Queen has three captures (a4, h4, e8). All must appear in engine's pseudo-legal set.",
+        rule="legal_moves_exact",
+        expected={"legal_uci": ["e4a4", "e4h4", "e4e8"]},
+        note="Queen has three captures (Qxa4, Qxh4, Qxe8). Forced-capture rule removes all quiet moves. Engine's filtered set must equal exactly these three.",
+    ),
+    Tier1Fixture(
+        test_id="king_capturable_exact_set",
+        fen="8/8/8/4k3/3Q4/8/8/4K3 w - - 0 1",
+        rule="legal_moves_exact",
+        expected={"legal_uci": ["d4e5"]},
+        note="No-check rule: opponent king is en prise. Forced-capture rule means Qxe5 is the only legal move. Engine must not 'protect' the position from king-capture nor offer quiet moves.",
     ),
     Tier1Fixture(
         test_id="promotion_to_king_offered",
@@ -66,33 +87,21 @@ TIER1_FIXTURES: list[Tier1Fixture] = [
         note="Antichess allows promotion to king. Engine must offer promotion-to-king alongside other promotions.",
     ),
     Tier1Fixture(
-        test_id="king_capturable",
-        fen="8/8/8/4k3/3Q4/8/8/4K3 w - - 0 1",
-        rule="contains_moves",
-        expected={"required_uci": ["d4e5"]},
-        note="No-check rule: opponent king is en prise. Engine must yield Qxe5 (only legal move under forced capture).",
-    ),
-    Tier1Fixture(
-        test_id="no_castling_offered",
+        test_id="no_castling_white",
         fen="r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
         rule="excludes_moves",
-        expected={"forbidden_uci": ["e1g1", "e1c1", "e8g8", "e8c8"]},
-        note="Castling is illegal in antichess even with full castling rights. Engine must not offer castling moves.",
+        expected={"forbidden_uci": ["e1g1", "e1c1"]},
+        note="Castling is illegal in antichess even with full castling rights. White to move: engine must not offer e1g1 or e1c1.",
     ),
     Tier1Fixture(
-        test_id="inverted_material_white_winning",
-        fen="3qk3/8/8/8/8/8/8/4K3 w - - 0 1",
-        rule="eval_winning",
-        expected={"min_score": 1},
-        note="White (1 piece) vs Black (2 pieces); fewer pieces = winning in antichess. evaluate_board must return positive score for white.",
+        test_id="no_castling_black",
+        fen="r3k2r/8/8/8/8/8/8/R3K2R b KQkq - 0 1",
+        rule="excludes_moves",
+        expected={"forbidden_uci": ["e8g8", "e8c8"]},
+        note="Same as no_castling_white but black to move. Engine must not offer e8g8 or e8c8.",
     ),
-    Tier1Fixture(
-        test_id="inverted_material_white_losing",
-        fen="4k3/8/8/8/8/8/8/3QK3 w - - 0 1",
-        rule="eval_losing",
-        expected={"max_score": -1},
-        note="White (2 pieces) vs Black (1 piece); more pieces = losing. evaluate_board must return negative score for white.",
-    ),
+
+    # --- terminal-state recognition ---
     Tier1Fixture(
         test_id="terminal_no_pieces_is_win",
         fen="8/8/8/8/8/8/8/4K3 b - - 0 1",
@@ -106,6 +115,45 @@ TIER1_FIXTURES: list[Tier1Fixture] = [
         rule="terminal_winner",
         expected={"winner_color": "black"},
         note="Black pawn a3 is blocked, no captures available. Black is stalemated. Giveaway rules: stalemated side wins.",
+    ),
+    Tier1Fixture(
+        test_id="checkmate_not_terminal",
+        fen="rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3",
+        rule="not_terminal",
+        expected={},
+        note="Fool's mate position: standard chess scores this as black wins by checkmate. Antichess has no check -> game continues. is_game_over() must be False.",
+    ),
+
+    # --- adversarial: prior conflicts where antichess rules invert std-chess intuition ---
+    Tier1Fixture(
+        test_id="king_attacked_quiet_moves_remain_legal",
+        fen="4q3/8/8/8/8/8/4K2P/8 w - - 0 1",
+        rule="contains_moves",
+        expected={"required_uci": ["h2h3", "h2h4"]},
+        note="White king on e1 is attacked by black queen on e8 (std-chess 'check'). No captures available. Antichess has no check rule -> pawn pushes are legal even though king remains 'in check'. Tests that engine doesn't filter quiet moves to 'save' the king.",
+    ),
+    Tier1Fixture(
+        test_id="must_capture_even_if_self_destructive",
+        fen="4q3/8/8/8/8/8/8/4Q3 w - - 0 1",
+        rule="legal_moves_exact",
+        expected={"legal_uci": ["e1e8"]},
+        note="White's only legal move (Qxe8) leaves white with one piece and black with zero -> black wins on the next ply. Std-chess intuition says 'don't make a capture that loses the game' but antichess's forced-capture rule overrides that. Engine must offer Qxe8 with no quiet alternatives.",
+    ),
+
+    # --- inverted material evaluation ---
+    Tier1Fixture(
+        test_id="inverted_material_white_winning",
+        fen="3qk3/8/8/8/8/8/8/4K3 w - - 0 1",
+        rule="eval_winning",
+        expected={"min_score": 1},
+        note="White (1 piece) vs Black (2 pieces); fewer pieces = winning in antichess. evaluate_board must return positive score for white. Note: harness's negamax assumes evaluate_board is side-to-move-positive (engine.py:151), so this is testing the project's frozen eval contract, not an arbitrary convention.",
+    ),
+    Tier1Fixture(
+        test_id="inverted_material_white_losing",
+        fen="4k3/8/8/8/8/8/8/3QK3 w - - 0 1",
+        rule="eval_losing",
+        expected={"max_score": -1},
+        note="White (2 pieces) vs Black (1 piece); more pieces = losing. evaluate_board must return negative score for white.",
     ),
 ]
 
@@ -160,12 +208,18 @@ TIER2_FIXTURES: list[Tier2Fixture] = [
         note="Two pawn captures available; forced-capture rule eliminates all quiet moves. Engine must pick a capture.",
     ),
     Tier2Fixture(
-        test_id="recognize_terminal_win_via_search",
-        fen="4k3/8/8/8/8/q7/P7/8 b - - 0 1",
-        expected_moves=frozenset({"a3a2"}),
-        depth=2,
+        test_id="find_pawn_sacrifice_to_force_win",
+        fen="8/8/8/8/q7/8/P6P/8 w - - 0 1",
+        expected_moves=frozenset({"a2a3"}),
+        depth=4,
         source="constructed",
-        note="Black queen has only one capture (forced Qxa2). After capture, white has 0 pieces -> white wins (variant_win for white). Black's only move is bad, but it's forced. Tests harness terminal scoring path.",
+        note=(
+            "White has three legal quiet moves: a2a3, h2h3, h2h4. Only a2a3 forces black's queen "
+            "to immediately capture (Qxa3, the only legal black move thereafter), starting a "
+            "two-step sequence that empties white's pieces and wins the game (white reaches 0 "
+            "pieces -> variant_win for white). The h2-pawn pushes are not in queen-capture range "
+            "of a4. At depth 4 the engine must see the variant_win and pick a2a3."
+        ),
     ),
 ]
 

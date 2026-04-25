@@ -84,6 +84,23 @@ def _run_tier1_fixture(engine: ModuleType, fx: Tier1Fixture) -> TestResult:
             passed = not missing
             detail = "ok" if passed else f"engine dropped legal moves: {sorted(missing)}"
 
+        elif fx.rule == "legal_moves_exact":
+            candidates = engine.get_pseudo_legal_moves(board)
+            engine_filtered = _filter_legal(board, candidates)
+            expected_set = set(fx.expected["legal_uci"])
+            missing = expected_set - engine_filtered
+            extra = engine_filtered - expected_set
+            passed = not missing and not extra
+            if passed:
+                detail = "ok"
+            else:
+                parts = []
+                if missing:
+                    parts.append(f"missing={sorted(missing)}")
+                if extra:
+                    parts.append(f"unexpected={sorted(extra)}")
+                detail = "; ".join(parts)
+
         elif fx.rule == "contains_moves":
             candidates = engine.get_pseudo_legal_moves(board)
             engine_uci = {m.uci() for m in candidates}
@@ -121,6 +138,10 @@ def _run_tier1_fixture(engine: ModuleType, fx: Tier1Fixture) -> TestResult:
                 score = int(engine.evaluate_board(board))
                 if score < 0:
                     detail += f" (warning: engine eval={score} disagrees with terminal win)"
+
+        elif fx.rule == "not_terminal":
+            passed = not board.is_game_over(claim_draw=True)
+            detail = "ok" if passed else f"board.is_game_over()=True; outcome={board.outcome(claim_draw=True)}"
 
         else:
             passed = False
@@ -206,11 +227,93 @@ def print_human_report(report: EngineCorrectnessReport) -> None:
     print()
 
 
+def validate_fixtures() -> list[str]:
+    """Sanity-check every fixture against chess.variant.AntichessBoard.
+
+    Returns a list of error strings (empty list means all fixtures are well-formed).
+    Catches: malformed FENs, expected moves that aren't actually legal at that
+    position, exact-set fixtures whose expected legal_uci doesn't match the
+    board, terminal fixtures whose claimed winner disagrees with python-chess.
+    """
+    errors: list[str] = []
+
+    for fx in TIER1_FIXTURES:
+        try:
+            board = chess.variant.AntichessBoard(fx.fen)
+        except Exception as exc:
+            errors.append(f"[T1 {fx.test_id}] FEN parse error: {exc}")
+            continue
+        legal_uci = {m.uci() for m in board.legal_moves}
+
+        if fx.rule == "legal_moves_exact":
+            expected = set(fx.expected.get("legal_uci", []))
+            if expected != legal_uci:
+                errors.append(
+                    f"[T1 {fx.test_id}] legal_moves_exact mismatch: "
+                    f"fixture={sorted(expected)} board.legal_moves={sorted(legal_uci)}"
+                )
+        elif fx.rule == "contains_moves":
+            required = set(fx.expected.get("required_uci", []))
+            illegal = required - legal_uci
+            if illegal:
+                errors.append(
+                    f"[T1 {fx.test_id}] required moves not actually legal: {sorted(illegal)}"
+                )
+        elif fx.rule == "excludes_moves":
+            forbidden = set(fx.expected.get("forbidden_uci", []))
+            present = forbidden & legal_uci
+            if present:
+                errors.append(
+                    f"[T1 {fx.test_id}] forbidden moves are actually legal at this position "
+                    f"(fixture is broken): {sorted(present)}"
+                )
+        elif fx.rule == "terminal_winner":
+            outcome = board.outcome(claim_draw=True)
+            expected_color = chess.WHITE if fx.expected["winner_color"] == "white" else chess.BLACK
+            actual = outcome.winner if outcome else None
+            if actual != expected_color:
+                errors.append(
+                    f"[T1 {fx.test_id}] terminal_winner mismatch: "
+                    f"fixture expects {fx.expected['winner_color']} ({expected_color}); "
+                    f"board.outcome().winner={actual}"
+                )
+        elif fx.rule == "not_terminal":
+            if board.is_game_over(claim_draw=True):
+                errors.append(
+                    f"[T1 {fx.test_id}] not_terminal fixture is actually terminal: "
+                    f"outcome={board.outcome(claim_draw=True)}"
+                )
+        elif fx.rule in ("eval_winning", "eval_losing", "move_gen_superset"):
+            pass  # nothing static to validate
+
+    for fx in TIER2_FIXTURES:
+        try:
+            board = chess.variant.AntichessBoard(fx.fen)
+        except Exception as exc:
+            errors.append(f"[T2 {fx.test_id}] FEN parse error: {exc}")
+            continue
+        legal_uci = {m.uci() for m in board.legal_moves}
+        illegal_expected = set(fx.expected_moves) - legal_uci
+        if illegal_expected:
+            errors.append(
+                f"[T2 {fx.test_id}] expected_moves contains illegal UCIs at this position: "
+                f"{sorted(illegal_expected)}"
+            )
+        if not fx.expected_moves & legal_uci:
+            errors.append(
+                f"[T2 {fx.test_id}] no expected_move is legal -- test is unsatisfiable"
+            )
+
+    return errors
+
+
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Hidden antichess correctness suite")
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--engine", help="single engine name (engines/<name>.py)")
     g.add_argument("--all", action="store_true", help="run against every engine in engines/")
+    g.add_argument("--validate-fixtures", action="store_true",
+                   help="check every fixture FEN/expected against python-chess and exit")
     p.add_argument("--depth", type=int, default=None,
                    help="override Tier 2 search depth (default: per-fixture)")
     p.add_argument("--json", action="store_true",
@@ -222,6 +325,18 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv if argv is not None else sys.argv[1:])
+
+    if getattr(args, "validate_fixtures"):
+        errors = validate_fixtures()
+        if errors:
+            print(f"FIXTURE VALIDATION FAILED ({len(errors)} error(s)):", file=sys.stderr)
+            for e in errors:
+                print(f"  {e}", file=sys.stderr)
+            return 1
+        print(f"Fixture validation OK ({len(TIER1_FIXTURES)} Tier 1, "
+              f"{len(TIER2_FIXTURES)} Tier 2).")
+        return 0
+
     if args.all:
         engine_names = [n for n in list_engines() if not n.startswith("_")]
     else:
