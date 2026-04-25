@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import argparse
 import csv
+import random
 import time
 from pathlib import Path
 
 from evaluation.adapter import HarnessAdapter
 from evaluation.match_loop import MatchConfig, run_match
+from evaluation.openings import generate_balanced_openings
 from evaluation.report import (
     EXPERIMENT_LOG_PATH,
     elo_ci95,
@@ -59,6 +61,16 @@ def _parse_args() -> argparse.Namespace:
         default=["_template"],
         help="Engine names to skip. Pass multiple times. Default: _template.",
     )
+    parser.add_argument("--seed", type=int, default=None,
+                        help="Seed for opening generation + eval noise (default: random).")
+    parser.add_argument("--noise-cp", type=int, default=3,
+                        help="±cp uniform jitter on evaluate_board (0 disables).")
+    parser.add_argument("--opening-plies", type=int, default=4,
+                        help="Random plies from start to build each opening (0 disables openings).")
+    parser.add_argument("--balance-threshold", type=int, default=200,
+                        help="Reject opening if |baseline_eval_cp| exceeds this.")
+    parser.add_argument("--opening-eval-depth", type=int, default=2,
+                        help="Search depth for the balance-check evaluation.")
     return parser.parse_args()
 
 
@@ -80,7 +92,27 @@ def main() -> None:
         print(f"no opponent engines to run against {args.baseline} (checked: {all_engines})")
         return
 
-    print(f"Tournament: {args.baseline} vs {opponents}  (games={args.games}, depth={args.depth})")
+    seed = args.seed if args.seed is not None else random.randrange(2**31)
+    master_rng = random.Random(seed)
+    print(
+        f"Tournament: {args.baseline} vs {opponents}  "
+        f"(games={args.games}, depth={args.depth}, seed={seed}, "
+        f"noise_cp={args.noise_cp}, opening_plies={args.opening_plies})"
+    )
+
+    openings: list[str] = []
+    if args.opening_plies > 0:
+        opening_count = max(1, args.games // 2)
+        openings = generate_balanced_openings(
+            opening_count,
+            plies=args.opening_plies,
+            balance_threshold_cp=args.balance_threshold,
+            reference_engine=args.baseline,
+            eval_depth=args.opening_eval_depth,
+            rng=random.Random(master_rng.randrange(2**31)),
+        )
+        print(f"Generated {len(openings)} balanced opening(s).")
+
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     out_path = RESULTS_DIR / f"tournament-{timestamp}.csv"
@@ -91,9 +123,22 @@ def main() -> None:
         print()
         print(f"--- {opponent} vs {args.baseline} ---")
         # Engine A = the opponent (so Elo(A-B) reads as "opponent vs baseline").
-        adapter_a = HarnessAdapter(opponent, depth=args.depth, movetime_ms=args.movetime_ms)
-        adapter_b = HarnessAdapter(args.baseline, depth=args.depth, movetime_ms=args.movetime_ms)
-        config = MatchConfig(games=max(1, args.games), depth=args.depth, movetime_ms=args.movetime_ms)
+        adapter_a = HarnessAdapter(
+            opponent, depth=args.depth, movetime_ms=args.movetime_ms,
+            noise_cp=args.noise_cp,
+            rng=random.Random(master_rng.randrange(2**31)),
+        )
+        adapter_b = HarnessAdapter(
+            args.baseline, depth=args.depth, movetime_ms=args.movetime_ms,
+            noise_cp=args.noise_cp,
+            rng=random.Random(master_rng.randrange(2**31)),
+        )
+        config = MatchConfig(
+            games=max(1, args.games),
+            depth=args.depth,
+            movetime_ms=args.movetime_ms,
+            openings=openings or None,
+        )
         report = run_match(adapter_a, adapter_b, config)
 
         tokens = read_tokens(opponent)

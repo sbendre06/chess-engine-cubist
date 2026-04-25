@@ -6,9 +6,12 @@ to the MoveEngine protocol (name, choose_move, close) used by the match loop.
 
 from __future__ import annotations
 
+import random
+
 import chess
 import chess.variant
 
+from evaluation.stochastic import wrap_with_eval_noise
 from harness.engine import SearchConfig, iterative_deepening
 from harness.loader import load_engine
 
@@ -20,9 +23,14 @@ class HarnessAdapter:
         *,
         depth: int,
         movetime_ms: int | None,
+        noise_cp: int = 0,
+        rng: random.Random | None = None,
     ) -> None:
         self.name = engine_name
-        self._engine_module = load_engine(engine_name)
+        loaded = load_engine(engine_name)
+        self._engine_module = wrap_with_eval_noise(
+            loaded, noise_cp, rng or random.Random()
+        )
         self._config = SearchConfig(max_depth=max(1, depth))
         if movetime_ms is not None:
             self._config.movetime_ms = max(1, movetime_ms)

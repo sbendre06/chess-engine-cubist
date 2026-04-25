@@ -27,6 +27,7 @@ class MatchConfig:
     depth: int = 3
     movetime_ms: int | None = None
     max_plies: int = 600
+    openings: list[str] | None = None
 
 
 @dataclass(slots=True)
@@ -59,9 +60,14 @@ def run_match(
     plies_record: list[int] = []
     secs_record: list[float] = []
 
+    openings = config.openings or []
     try:
         for idx in range(1, config.games + 1):
+            # Pair games (1,2), (3,4), ... so each opening is played twice
+            # with colors swapped — bias from the position cancels out.
             board = chess.variant.AntichessBoard()
+            if openings:
+                board.set_fen(openings[((idx - 1) // 2) % len(openings)])
             white = adapter_a if idx % 2 == 1 else adapter_b
             black = adapter_b if idx % 2 == 1 else adapter_a
 
