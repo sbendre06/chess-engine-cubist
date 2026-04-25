@@ -28,6 +28,24 @@ if str(ROOT) not in sys.path:
 from harness.engine import SearchConfig, iterative_deepening
 from harness.loader import EngineContractError, load_engine
 
+ENGINE_LABELS: dict[str, str] = {
+    "baseline":                   "Baseline Bob",
+    "caveman":                    "Caveman Dan",
+    "noarch_nostrat_noplan":      "Lost Luke",
+    "noarch_nostrat_yesplan":     "Plan-mode Patty",
+    "noarch_yesstrat_noplan":     "Idea-Guy Ian",
+    "yesarch_nostrat_noplan":     "Architecture only",
+    "yesarch_yessttrat_noplan":   "Supervisor Sarah",
+    "yesarch-nostrat-yesplan":    "Methodical Machine Mary",
+    "quant researcher":           "Quant Researcher Alpha",
+    "arch1-strat1-plan1":         "Omnipotent Owen",
+}
+
+
+def _engine_label(name: str) -> str:
+    return ENGINE_LABELS.get(name, name)
+
+
 UNICODE_PIECE = {
     "P": "♙",
     "N": "♘",
@@ -42,6 +60,10 @@ UNICODE_PIECE = {
     "q": "♛",
     "k": "♚",
 }
+
+
+def _build_html(engine_name: str, engine_label: str) -> str:
+    return HTML.replace("__ENGINE_NAME__", engine_name).replace("__ENGINE_LABEL__", engine_label)
 
 
 HTML = """<!doctype html>
@@ -61,10 +83,16 @@ HTML = """<!doctype html>
     #controls { margin-top: 12px; }
     button { padding: 8px 12px; margin-right: 8px; }
     .small { color: #666; font-size: 13px; margin-top: 8px; }
+    #engine-info { margin-bottom: 10px; padding: 8px 12px; background: #f4f4f4; border-left: 3px solid #888; font-size: 13px; color: #333; max-width: 448px; }
+    #engine-info .label { font-weight: bold; color: #555; }
   </style>
 </head>
 <body>
   <h2>Cubist AntiChess</h2>
+  <div id="engine-info">
+    <span class="label">Engine prompt structure:</span> __ENGINE_LABEL__
+    <span style="color:#999; margin-left:8px;">(__ENGINE_NAME__)</span>
+  </div>
   <div id="status"></div>
   <div id="board"></div>
   <div id="controls">
@@ -326,7 +354,7 @@ def make_handler(session: GameSession):
 
         def do_GET(self) -> None:  # noqa: N802
             if self.path == "/":
-                body = HTML.encode("utf-8")
+                body = _build_html(session.engine_name, _engine_label(session.engine_name)).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))
