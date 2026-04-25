@@ -7,15 +7,15 @@
 
 ## Modules
 
-- `antiengine/board.py` — `EngineState` wrapper.
-- `antiengine/uci.py` + `antiengine/engine.py` — UCI loop and orchestration.
-- `antiengine/search.py` + `antiengine/tt.py` — negamax, ID, move ordering, quiescence.
-- `antiengine/eval.py` — features and weighted sum.
-- `tools/match.py` — engine-vs-engine gauntlet for measurement.
+- `harness/` — frozen UCI shell + negamax search; loads `engines/<name>.py` modules.
+- `engines/<name>.py` — agent-written Core 3 engine (get_pseudo_legal_moves / evaluate_board / order_moves).
+- `evaluation/` — tournament runner that pairs every engine against the baseline.
+- `tools/gui_vs_engine.py`, `tools/simple_web_gui.py` — manual play GUIs against any `engines/<name>.py`.
+- `legacy/` — pre-harness reference engines (`antiengine/`, `classicalengine/`) and their tools (`match.py`, `play_vs_engine.py`, `simple_web_gui_classical.py`); not on the main ablation path.
 
 ## Interfaces
 
-See `antiengine/types.py`: `SearchResult`, `SearchConfig`, `Evaluator`, `TranspositionTableProtocol`, `UCIEngine`.
+See `harness/loader.py` for the Core 3 engine contract that every `engines/<name>.py` must satisfy.
 
 ## Antichess-specific search/eval notes
 
