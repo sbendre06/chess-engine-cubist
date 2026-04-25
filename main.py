@@ -1,18 +1,13 @@
+"""Cubist Frozen Harness entrypoint.
+
+Run:
+    python main.py --engine baseline
+
+All harness logic lives in harness/. Engine logic lives in engines/<name>.py.
+See AGENTS.md for the agent contract.
 """
-Optional thin entrypoint: delegate to antiengine.uci or a future GUI.
 
-python main.py  ->  could invoke UCI or print help.
-"""
-
-from __future__ import annotations
-
-from antiengine.uci import main as uci_main
-
-
-def main() -> None:
-    """Re-export uci.main() or argparse to choose mode."""
-    uci_main()
-
+from harness.cli import main
 
 if __name__ == "__main__":
     main()
