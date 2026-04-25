@@ -1,10 +1,13 @@
-# Cubist Antichess Ablation
+# Antichess Ablation
 
-In quantitative finance, alpha lives where intuition ends. Just as Point72 builds niche strategies that defy market consensus, we’ve researched how to force LLMs out of their "generic" training shells.
+In quantitative finance, alpha lives where intuition ends. Just as quant firms builds niche strategies that defy market consensus, we’ve researched how to force LLMs out of their "generic" training shells.
 
 By building an engine for **Antichess**—a variant where the goal is to lose and captures are mandatory—we created a stress test for AI. Standard LLMs are biased toward "winning" conventional chess; they struggle when the logic is inverted. This repository is an ablation study of prompting strategies used to override that bias.
 
 Each engine in `engines/` was written by a Claude session given a specific combination of three prompt ingredients — architectural guidance, antichess strategy knowledge, and opening-theory planning — while the search, UCI loop, and game rules were provided as a frozen harness the agent could not modify.
+
+Built for Cubist Hackathon 2026 and future experimentation.
+Sohan Bendre, Casper Liao, Austin Senna Wijaya, Kevin Wu, Aiden Zhou.
 
 ---
 
