@@ -169,3 +169,29 @@ Landed `engines/noarch_nostrat_yesplan.py` with:
 - `evaluate_board`: -own_material + ½ bonus per piece attacked by opponent
 - `order_moves`: captures-that-expose-our-piece first, then other captures, then exposure non-captures
 Engine searches depth 4 in ~1.2s from starting position (~10k nodes). Next: run tournament vs baseline.
+
+---
+
+## Session: yesarch-nostrat-yesplan
+
+**Date:** 2026-04-25
+**Operator:** Claude Sonnet 4.6
+**Goal:** Implement Antichess engine with inverted-weight material evaluation, mobility penalty, and capture-pressure move ordering
+
+### Token usage
+- Input tokens: (update from `/cost` before commit)
+- Output tokens: (update from `/cost` before commit)
+
+### Wall-clock time
+- Total elapsed: (update before commit)
+
+### Human interventions
+- Count: 0
+- Notes: Plan-mode session; no interventions during implementation
+
+### Bugs and issues fixed
+1. Terminal handling in `evaluate_board` is needed for the timeout path — harness/engine.py line 136 calls `evaluate_board` before `is_game_over`, so terminal positions can reach our evaluator on timeout
+2. En passant requires a special case in `order_moves` — captured pawn is not on `move.to_square`
+
+### Outcome
+`engines/yesarch-nostrat-yesplan.py` created with three functions: `get_pseudo_legal_moves` (delegates to `board.legal_moves`), `evaluate_board` (inverted material + mobility penalty + attack-pressure bonus), `order_moves` (sacrifice-heaviest-piece-first ordering). `engines/yesarch-nostrat-yesplan.tokens.csv` stub created; update token counts from `/cost` before committing.
