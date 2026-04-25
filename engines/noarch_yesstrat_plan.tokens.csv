@@ -1,2 +1,2 @@
-prompt_name,input_tokens,output_tokens,elapsed_s,note
-noarch_yesstrat_plan,18500,3500,420,run_0110
+prompt_name,input_tokens,output_tokens,cached_reads,cost_usd,elapsed_s,note
+noarch_yesstrat_plan,18500,3500,250000,0.19,420,run_0110
