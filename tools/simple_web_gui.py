@@ -64,7 +64,7 @@ HTML = """<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Cubist AntiChess</title>
+  <title>Antichess - Good Luck!!</title>
   <style>
     body { font-family: system-ui, sans-serif; margin: 20px; }
     #layout { display: flex; gap: 28px; align-items: flex-start; }
@@ -136,10 +136,26 @@ HTML = """<!doctype html>
     .engine-card .eng-key { display: block; color: #aaa; font-size: 11px; margin-top: 2px; font-weight: normal; }
     .engine-card.active .eng-key { color: #6aaae8; }
     .switch-hint { font-size: 12px; color: #999; margin-top: 8px; }
+
+    /* Side picker */
+    #side-picker { display: flex; gap: 10px; margin-bottom: 18px; align-items: center; }
+    .side-btn {
+      padding: 7px 20px; border: 2px solid #ccc; border-radius: 5px;
+      background: #f4f4f4; cursor: pointer; font-size: 14px; font-weight: 600;
+      transition: all 0.15s;
+    }
+    .side-btn:hover { border-color: #888; }
+    #playWhiteBtn.chosen { border-color: #555; background: #fff; color: #111; box-shadow: 0 1px 5px rgba(0,0,0,0.15); }
+    #playBlackBtn.chosen { border-color: #111; background: #2b2b2b; color: #eee; box-shadow: 0 1px 5px rgba(0,0,0,0.4); }
   </style>
 </head>
 <body>
-  <h2>Cubist AntiChess</h2>
+  <h2>Antichess &mdash; Good Luck!!</h2>
+  <div id="side-picker">
+    <span style="font-size:13px;color:#555;font-weight:500;">Play as:</span>
+    <button class="side-btn" id="playWhiteBtn">&#9812; White</button>
+    <button class="side-btn" id="playBlackBtn">&#9818; Black</button>
+  </div>
   <div id="layout">
     <div>
       <div id="status"></div>
@@ -172,6 +188,7 @@ HTML = """<!doctype html>
   <script>
     const ENGINES = __ENGINES_JSON__;
     let activeEngine = "__ACTIVE_ENGINE__";
+    let playingAs = "white";
 
     const PIECE_BASE = "https://cdn.jsdelivr.net/gh/lichess-org/lila@master/public/piece/maestro/";
     function pieceImgUrl(piece) {
@@ -184,9 +201,49 @@ HTML = """<!doctype html>
     const newGameBtn = document.getElementById("newGameBtn");
     const refreshBtn = document.getElementById("refreshBtn");
     const engineListEl = document.getElementById("engine-list");
+    const playWhiteBtn = document.getElementById("playWhiteBtn");
+    const playBlackBtn = document.getElementById("playBlackBtn");
 
     let current = null;
     let selected = null;
+
+    function updateSideButtons() {
+      playWhiteBtn.classList.toggle("chosen", playingAs === "white");
+      playBlackBtn.classList.toggle("chosen", playingAs === "black");
+    }
+
+    function updateCoordLabels(flipped) {
+      const rankEl = document.getElementById("rank-labels");
+      const fileEl = document.getElementById("file-labels");
+      const ranks = flipped ? ["1","2","3","4","5","6","7","8"] : ["8","7","6","5","4","3","2","1"];
+      const files = flipped ? ["h","g","f","e","d","c","b","a"] : ["a","b","c","d","e","f","g","h"];
+      rankEl.innerHTML = ranks.map(r => `<span>${r}</span>`).join("");
+      fileEl.innerHTML = files.map(f => `<span>${f}</span>`).join("");
+    }
+
+    async function setSide(side) {
+      if (side === playingAs) return;
+      statusEl.textContent = "Starting new game...";
+      try {
+        const data = await api("/set_side", "POST", { side });
+        playingAs = side;
+        current = data.state;
+        selected = null;
+        updateSideButtons();
+        updateCoordLabels(playingAs === "black");
+        if (current.engine_turn && !current.game_over) {
+          statusEl.textContent = "Engine thinking...";
+          const moved = await api("/engine_move", "POST", {});
+          current = moved.state;
+        }
+        render();
+      } catch (err) {
+        statusEl.textContent = "Error: " + err.message;
+      }
+    }
+
+    playWhiteBtn.onclick = () => setSide("white");
+    playBlackBtn.onclick = () => setSide("black");
 
     function renderEngineList() {
       engineListEl.innerHTML = "";
@@ -295,9 +352,12 @@ HTML = """<!doctype html>
     function render() {
       boardEl.innerHTML = "";
       const targets = selected ? legalTargetsFrom(selected) : new Set();
+      const flipped = (playingAs === "black");
 
-      for (let rank = 7; rank >= 0; rank--) {
-        for (let file = 0; file < 8; file++) {
+      for (let ri = 0; ri < 8; ri++) {
+        const rank = flipped ? ri : 7 - ri;
+        for (let fi = 0; fi < 8; fi++) {
+          const file = flipped ? 7 - fi : fi;
           const idx = rank * 8 + file;
           const sq = indexToSquare(idx);
           const piece = current.board[idx];
@@ -337,6 +397,9 @@ HTML = """<!doctype html>
         activeEngine = current.engine_name;
         renderEngineList();
       }
+      playingAs = current.you_are_white ? "white" : "black";
+      updateSideButtons();
+      updateCoordLabels(playingAs === "black");
       if (current.engine_turn && !current.game_over) {
         statusEl.textContent = "Engine thinking...";
         const moved = await api("/engine_move", "POST", {});
@@ -427,6 +490,7 @@ class GameSession:
             "status": self._status(),
             "engine_name": self.engine_name,
             "engine_label": _engine_label(self.engine_name),
+            "you_are_white": self.you_are_white,
         }
 
     def play_human_move(self, move_uci: str) -> None:
@@ -506,6 +570,17 @@ def make_handler(session: GameSession):
 
         def do_POST(self) -> None:  # noqa: N802
             if self.path == "/new_game":
+                session.reset()
+                _json(self, 200, {"ok": True, "state": session.snapshot()})
+                return
+
+            if self.path == "/set_side":
+                data = _read_json(self)
+                side = str(data.get("side", "")).strip()
+                if side not in ("white", "black"):
+                    _json(self, 400, {"ok": False, "error": "side must be 'white' or 'black'."})
+                    return
+                session.you_are_white = (side == "white")
                 session.reset()
                 _json(self, 200, {"ok": True, "state": session.snapshot()})
                 return
