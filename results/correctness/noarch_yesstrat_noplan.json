@@ -1,0 +1,511 @@
+{
+  "engine_name": "noarch_yesstrat_noplan",
+  "tier0_passed": 50,
+  "tier0_total": 50,
+  "tier1_passed": 12,
+  "tier1_total": 14,
+  "tier2_passed": 5,
+  "tier2_total": 7,
+  "tier0_pass_rate": 1.0,
+  "tier1_pass_rate": 0.8571428571428571,
+  "tier2_pass_rate": 0.7142857142857143,
+  "results": [
+    {
+      "test_id": "random_walk_00",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 0.0001116669736802578
+    },
+    {
+      "test_id": "random_walk_01",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 6.412493530660868e-05
+    },
+    {
+      "test_id": "random_walk_02",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 9.775010403245687e-05
+    },
+    {
+      "test_id": "random_walk_03",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 6.391701754182577e-05
+    },
+    {
+      "test_id": "random_walk_04",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 0.0001027919352054596
+    },
+    {
+      "test_id": "random_walk_05",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 8.437503129243851e-05
+    },
+    {
+      "test_id": "random_walk_06",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 8.770800195634365e-05
+    },
+    {
+      "test_id": "random_walk_07",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 7.512501906603575e-05
+    },
+    {
+      "test_id": "random_walk_08",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 7.225002627819777e-05
+    },
+    {
+      "test_id": "random_walk_09",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 5.0582922995090485e-05
+    },
+    {
+      "test_id": "random_walk_10",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 6.12910371273756e-05
+    },
+    {
+      "test_id": "random_walk_11",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 9.08339861780405e-05
+    },
+    {
+      "test_id": "random_walk_12",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 7.816706784069538e-05
+    },
+    {
+      "test_id": "random_walk_13",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 4.083302337676287e-05
+    },
+    {
+      "test_id": "random_walk_14",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 7.795891724526882e-05
+    },
+    {
+      "test_id": "random_walk_15",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 5.162495654076338e-05
+    },
+    {
+      "test_id": "random_walk_16",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 8.737493772059679e-05
+    },
+    {
+      "test_id": "random_walk_17",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 7.954100146889687e-05
+    },
+    {
+      "test_id": "random_walk_18",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 6.195798050612211e-05
+    },
+    {
+      "test_id": "random_walk_19",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 5.6875054724514484e-05
+    },
+    {
+      "test_id": "random_walk_20",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 5.529192276299e-05
+    },
+    {
+      "test_id": "random_walk_21",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 8.291704580187798e-05
+    },
+    {
+      "test_id": "random_walk_22",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 8.245802018791437e-05
+    },
+    {
+      "test_id": "random_walk_23",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 8.070794865489006e-05
+    },
+    {
+      "test_id": "random_walk_24",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 3.9291917346417904e-05
+    },
+    {
+      "test_id": "random_walk_25",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 3.966700751334429e-05
+    },
+    {
+      "test_id": "random_walk_26",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 6.912497337907553e-05
+    },
+    {
+      "test_id": "random_walk_27",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 4.9083027988672256e-05
+    },
+    {
+      "test_id": "random_walk_28",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 5.3541967645287514e-05
+    },
+    {
+      "test_id": "random_walk_29",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 8.954096119850874e-05
+    },
+    {
+      "test_id": "random_walk_30",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 7.616693619638681e-05
+    },
+    {
+      "test_id": "random_walk_31",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 8.412508759647608e-05
+    },
+    {
+      "test_id": "random_walk_32",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 5.579099524766207e-05
+    },
+    {
+      "test_id": "random_walk_33",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 6.770796608179808e-05
+    },
+    {
+      "test_id": "random_walk_34",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 7.675006054341793e-05
+    },
+    {
+      "test_id": "random_walk_35",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 8.708296809345484e-05
+    },
+    {
+      "test_id": "random_walk_36",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 4.9708993174135685e-05
+    },
+    {
+      "test_id": "random_walk_37",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 8.9791021309793e-05
+    },
+    {
+      "test_id": "random_walk_38",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 7.62079143896699e-05
+    },
+    {
+      "test_id": "random_walk_39",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 7.929105777293444e-05
+    },
+    {
+      "test_id": "random_walk_40",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 8.487491868436337e-05
+    },
+    {
+      "test_id": "random_walk_41",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 7.345795165747404e-05
+    },
+    {
+      "test_id": "random_walk_42",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 4.80839516967535e-05
+    },
+    {
+      "test_id": "random_walk_43",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 5.195790436118841e-05
+    },
+    {
+      "test_id": "random_walk_44",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 9.187497198581696e-05
+    },
+    {
+      "test_id": "random_walk_45",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 4.850002005696297e-05
+    },
+    {
+      "test_id": "random_walk_46",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 5.587493069469929e-05
+    },
+    {
+      "test_id": "random_walk_47",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 5.570799112319946e-05
+    },
+    {
+      "test_id": "random_walk_48",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 6.600003689527512e-05
+    },
+    {
+      "test_id": "random_walk_49",
+      "tier": 0,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 8.641602471470833e-05
+    },
+    {
+      "test_id": "move_gen_completeness_startpos",
+      "tier": 1,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 9.26250359043479e-05
+    },
+    {
+      "test_id": "forced_capture_exact_set",
+      "tier": 1,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 2.191704697906971e-05
+    },
+    {
+      "test_id": "multi_capture_exact_set",
+      "tier": 1,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 2.954190131276846e-05
+    },
+    {
+      "test_id": "king_capturable_exact_set",
+      "tier": 1,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 2.487492747604847e-05
+    },
+    {
+      "test_id": "promotion_to_king_offered",
+      "tier": 1,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 2.4124979972839355e-05
+    },
+    {
+      "test_id": "no_castling_white",
+      "tier": 1,
+      "passed": false,
+      "detail": "engine offered forbidden moves: ['e1c1', 'e1g1']",
+      "elapsed_s": 3.3916905522346497e-05
+    },
+    {
+      "test_id": "no_castling_black",
+      "tier": 1,
+      "passed": false,
+      "detail": "engine offered forbidden moves: ['e8c8', 'e8g8']",
+      "elapsed_s": 3.3958000130951405e-05
+    },
+    {
+      "test_id": "terminal_no_pieces_is_win",
+      "tier": 1,
+      "passed": true,
+      "detail": "outcome.winner=False expected=False",
+      "elapsed_s": 1.4750054106116295e-05
+    },
+    {
+      "test_id": "stalemate_is_win_for_stalemated",
+      "tier": 1,
+      "passed": true,
+      "detail": "outcome.winner=False expected=False",
+      "elapsed_s": 1.8666032701730728e-05
+    },
+    {
+      "test_id": "checkmate_not_terminal",
+      "tier": 1,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 0.00016604096163064241
+    },
+    {
+      "test_id": "king_attacked_quiet_moves_remain_legal",
+      "tier": 1,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 2.291589044034481e-05
+    },
+    {
+      "test_id": "must_capture_even_if_self_destructive",
+      "tier": 1,
+      "passed": true,
+      "detail": "ok",
+      "elapsed_s": 1.925008837133646e-05
+    },
+    {
+      "test_id": "inverted_material_white_winning",
+      "tier": 1,
+      "passed": true,
+      "detail": "score=10 (need >= 1)",
+      "elapsed_s": 6.450002547353506e-05
+    },
+    {
+      "test_id": "inverted_material_white_losing",
+      "tier": 1,
+      "passed": true,
+      "detail": "score=-78 (need <= -1)",
+      "elapsed_s": 0.00012033397797495127
+    },
+    {
+      "test_id": "forced_single_move",
+      "tier": 2,
+      "passed": true,
+      "detail": "chose=e4d5 expected_any_of=['e4d5'] depth_completed=2 score_cp=-84",
+      "elapsed_s": 0.0006512919208034873
+    },
+    {
+      "test_id": "opening_e3_or_central_pawn",
+      "tier": 2,
+      "passed": false,
+      "detail": "chose=h2h3 expected_any_of=['d2d3', 'd2d4', 'e2e3', 'e2e4'] depth_completed=3 score_cp=1065",
+      "elapsed_s": 0.2863562499405816
+    },
+    {
+      "test_id": "liardet_a4_or_pawn_response",
+      "tier": 2,
+      "passed": false,
+      "detail": "chose=f1a6 expected_any_of=['a2a3', 'a2a4', 'b2b3', 'c2c3', 'c2c4'] depth_completed=3 score_cp=1170",
+      "elapsed_s": 0.3348115000408143
+    },
+    {
+      "test_id": "kp_endgame_push_pawn",
+      "tier": 2,
+      "passed": true,
+      "detail": "chose=a2a4 expected_any_of=['a2a3', 'a2a4'] depth_completed=4 score_cp=-81",
+      "elapsed_s": 0.07429154205601662
+    },
+    {
+      "test_id": "promotion_at_seventh",
+      "tier": 2,
+      "passed": true,
+      "detail": "chose=a7a8k expected_any_of=['a7a8b', 'a7a8k', 'a7a8n', 'a7a8q', 'a7a8r'] depth_completed=3 score_cp=-1",
+      "elapsed_s": 0.03024333401117474
+    },
+    {
+      "test_id": "capture_only_legal_under_forced_rule",
+      "tier": 2,
+      "passed": true,
+      "detail": "chose=e5f6 expected_any_of=['e5d6', 'e5f6'] depth_completed=2 score_cp=-58",
+      "elapsed_s": 0.001337834051810205
+    },
+    {
+      "test_id": "find_pawn_sacrifice_to_force_win",
+      "tier": 2,
+      "passed": true,
+      "detail": "chose=a2a3 expected_any_of=['a2a3'] depth_completed=4 score_cp=999996",
+      "elapsed_s": 0.00425487500615418
+    }
+  ]
+}
