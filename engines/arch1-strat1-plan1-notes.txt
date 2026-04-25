@@ -1,0 +1,25 @@
+Session                                                             
+  Total cost:            $0.91                                        
+  Total duration (API):  7m 39s                                       
+  Total duration (wall): 16m 20s                             
+  Total code changes:    193 lines added, 0 lines removed
+  Usage by model:
+      claude-haiku-4-5:  3.3k input, 10.9k output, 707.2k cache read,
+  93.2k cache write ($0.2450)
+     claude-sonnet-4-6:  3.4k input, 18.2k output, 722.2k cache read,
+  44.7k cache write ($0.67)
+
+
+  Final Score
+                                                                                                                                                                   
+  ┌─────────────────┬────────┬───────┐
+  │    Criterion    │ Weight │ Score │                                                                                                                             
+  ├─────────────────┼────────┼───────┤                      
+  │ Robustness      │ 30%    │ 7.0   │
+  ├─────────────────┼────────┼───────┤
+  │ Maintainability │ 30%    │ 7.5   │
+  ├─────────────────┼────────┼───────┤                                                                                                                             
+  │ Efficiency      │ 20%    │ 6.5   │
+  ├─────────────────┼────────┼───────┤                                                                                                                             
+  │ Standards       │ 20%    │ 7.5   │                      
+  └─────────────────┴────────┴───────┘
