@@ -6,42 +6,24 @@ from typing import Any, Callable
 
 import chess
 
-from classicalengine.constants import INFINITY, MATE_VALUE, PIECE_VALUE
+from classicalengine.constants import INFINITY, PIECE_VALUE
+from classicalengine.core import (
+    board_key,
+    evaluate_board,
+    get_legal_moves,
+    make_move,
+    mvv_lva_score,
+    terminal_score,
+    unmake_move,
+)
 from classicalengine.tt import EXACT, LOWER_BOUND, UPPER_BOUND
 from classicalengine.types import SearchConfig, SearchResult
-
-
-def _terminal_score(board: chess.Board, ply: int) -> int:
-    if board.is_checkmate():
-        return -MATE_VALUE + ply
-    if board.is_stalemate() or board.is_insufficient_material() or board.can_claim_draw():
-        return 0
-    outcome = board.outcome(claim_draw=True)
-    if outcome is None or outcome.winner is None:
-        return 0
-    return (MATE_VALUE - ply) if outcome.winner == board.turn else (-MATE_VALUE + ply)
-
-
-def _key_for_board(board: chess.Board) -> int:
-    if hasattr(board, "_transposition_key"):
-        return hash(board._transposition_key())
-    return hash(board.fen())
-
-
-def _mvv_lva_score(board: chess.Board, move: chess.Move) -> int:
-    if not board.is_capture(move):
-        return 0
-    captured = board.piece_at(move.to_square)
-    attacker = board.piece_at(move.from_square)
-    captured_val = PIECE_VALUE.get(captured.piece_type, 0) if captured else 0
-    attacker_val = PIECE_VALUE.get(attacker.piece_type, 1) if attacker else 1
-    return 10_000 + captured_val * 10 - attacker_val
 
 
 def _move_priority(board: chess.Board, move: chess.Move, history: list[list[int]]) -> int:
     score = history[move.from_square][move.to_square]
     if board.is_capture(move):
-        score += _mvv_lva_score(board, move)
+        score += mvv_lva_score(board, move)
     if move.promotion is not None:
         score += PIECE_VALUE.get(move.promotion, 0)
     if board.gives_check(move):
@@ -56,7 +38,7 @@ def _ordered_moves(
     history: list[list[int]],
     ply: int,
 ) -> list[chess.Move]:
-    legal = list(board.legal_moves)
+    legal = get_legal_moves(board)
     if not legal:
         return legal
 
@@ -123,7 +105,7 @@ def negamax_root(
     best_move = None
     best_line: list[str] = []
 
-    tt_entry = tt.probe_exact_key(_key_for_board(board))
+    tt_entry = tt.probe_exact_key(board_key(board))
     tt_move = None
     if tt_entry is not None and tt_entry.best_move_uci is not None:
         try:
@@ -134,7 +116,7 @@ def negamax_root(
     for move in _ordered_moves(board, tt_move, context.killers, context.history, ply=0):
         if context.should_stop():
             break
-        board.push(move)
+        make_move(board, move)
         score = -negamax(
             board,
             depth - 1,
@@ -148,7 +130,7 @@ def negamax_root(
             config,
             context,
         )
-        board.pop()
+        unmake_move(board)
 
         if score > best_score:
             best_score = score
@@ -160,20 +142,20 @@ def negamax_root(
             break
 
     if best_move is None:
-        legal = list(board.legal_moves)
+        legal = get_legal_moves(board)
         if legal:
             best_move = legal[0]
             best_score = alpha_orig
             best_line = [best_move.uci()]
         else:
-            best_score = _terminal_score(board, 0)
+            best_score = terminal_score(board, 0)
 
     flag = EXACT
     if best_score <= alpha_orig:
         flag = UPPER_BOUND
     elif best_score >= beta:
         flag = LOWER_BOUND
-    tt.store(_key_for_board(board), depth, best_score, flag, best_move)
+    tt.store(board_key(board), depth, best_score, flag, best_move)
     return best_score, best_move, best_line
 
 
@@ -197,12 +179,12 @@ def negamax(
     alpha_orig = alpha
 
     if board.is_game_over(claim_draw=True):
-        return _terminal_score(board, ply)
+        return terminal_score(board, ply)
 
     if depth <= 0:
         return quiescence(board, alpha, beta, ply, tt, evaluator, config, context=context, qdepth=0)
 
-    key = _key_for_board(board)
+    key = board_key(board)
     entry = tt.probe(key, depth)
     if entry is not None:
         if entry.flag == EXACT:
@@ -224,7 +206,7 @@ def negamax(
     best_score = -INFINITY
     best_move = None
     for move in _ordered_moves(board, tt_move, killers, history, ply):
-        board.push(move)
+        make_move(board, move)
         score = -negamax(
             board,
             depth - 1,
@@ -238,7 +220,7 @@ def negamax(
             config,
             context,
         )
-        board.pop()
+        unmake_move(board)
 
         if context.should_stop():
             return score
@@ -259,7 +241,7 @@ def negamax(
             break
 
     if best_move is None:
-        return _terminal_score(board, ply)
+        return terminal_score(board, ply)
 
     history[best_move.from_square][best_move.to_square] += depth * depth
     flag = EXACT
@@ -288,14 +270,14 @@ def quiescence(
     context.nodes += 1
 
     if board.is_game_over(claim_draw=True):
-        return _terminal_score(board, ply)
+        return terminal_score(board, ply)
 
     if board.is_check():
-        noisy_moves = list(board.legal_moves)
+        noisy_moves = get_legal_moves(board)
     else:
-        noisy_moves = [move for move in board.legal_moves if board.is_capture(move) or move.promotion is not None]
+        noisy_moves = [move for move in get_legal_moves(board) if board.is_capture(move) or move.promotion is not None]
 
-    stand_pat = evaluator.evaluate(board, ply=ply)
+    stand_pat = evaluate_board(board, evaluator, ply=ply)
     if stand_pat >= beta:
         return stand_pat
     if stand_pat > alpha:
@@ -304,9 +286,9 @@ def quiescence(
     if qdepth >= config.qsearch_max_depth or not noisy_moves:
         return stand_pat
 
-    noisy_moves.sort(key=lambda move: _mvv_lva_score(board, move), reverse=True)
+    noisy_moves.sort(key=lambda move: mvv_lva_score(board, move), reverse=True)
     for move in noisy_moves:
-        board.push(move)
+        make_move(board, move)
         score = -quiescence(
             board,
             -beta,
@@ -318,7 +300,7 @@ def quiescence(
             context=context,
             qdepth=qdepth + 1,
         )
-        board.pop()
+        unmake_move(board)
         if score >= beta:
             return score
         if score > alpha:
