@@ -14,11 +14,13 @@ from pathlib import Path
 from evaluation.adapter import HarnessAdapter
 from evaluation.match_loop import MatchConfig, run_match
 from evaluation.report import (
+    EXPERIMENT_LOG_PATH,
     elo_ci95,
     elo_per_1k_tokens,
     list_engines,
     read_tokens,
     score_to_elo,
+    update_experiment_log_winrates,
 )
 
 
@@ -84,6 +86,7 @@ def main() -> None:
     out_path = RESULTS_DIR / f"tournament-{timestamp}.csv"
 
     rows: list[dict] = []
+    name_to_winrate: dict[str, float] = {}
     for opponent in opponents:
         print()
         print(f"--- {opponent} vs {args.baseline} ---")
@@ -122,6 +125,7 @@ def main() -> None:
             "avg_game_seconds": round(report.avg_game_seconds, 2),
         }
         rows.append(row)
+        name_to_winrate[opponent] = score
 
     with out_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=CSV_FIELDS)
@@ -151,8 +155,11 @@ def main() -> None:
             _fmt_cell(row["elo_per_1k_tokens"]),
         )
         print("  ".join(f"{str(c):<14}" for c in cells))
+    update_experiment_log_winrates(name_to_winrate)
+
     print()
     print(f"Wrote {out_path}")
+    print(f"Updated {EXPERIMENT_LOG_PATH} winrates for: {', '.join(sorted(name_to_winrate))}")
 
 
 if __name__ == "__main__":

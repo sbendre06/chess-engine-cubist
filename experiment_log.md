@@ -36,6 +36,10 @@ python log_experiment.py \
     --interventions 13
 ```
 
+`engine_winrate` is left blank by `log_experiment.py` and is populated
+automatically the next time `python -m evaluation.tournament` runs against
+the named engine.
+
 ### Wall-clock time
 
 Approximate: this session ran across multiple back-and-forth turns covering
