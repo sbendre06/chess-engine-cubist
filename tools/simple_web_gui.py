@@ -37,7 +37,7 @@ ENGINE_LABELS: dict[str, str] = {
     "yesarch_nostrat_noplan":     "Architectural Alina",
     "yesarch_yessttrat_noplan":   "Supervisor Sarah",
     "yesarch-nostrat-yesplan":    "Methodical Machine Mary",
-    "quant researcher":           "Quant Researcher Kevin",
+    "yesarch_yesstrat_yesplan_p1": "Quant Researcher Kevin",
     "arch1-strat1-plan1":         "Omnipotent Owen",
 }
 
@@ -174,7 +174,6 @@ HTML = """<!doctype html>
       </div>
       <div id="controls">
         <button class="ctrl-btn" id="newGameBtn">New Game</button>
-        <button class="ctrl-btn" id="refreshBtn">Refresh</button>
       </div>
       <div class="small">Click source square then destination square. Promotions prompt for piece (q/r/b/n/k).</div>
     </div>
@@ -199,7 +198,7 @@ HTML = """<!doctype html>
     const boardEl = document.getElementById("board");
     const statusEl = document.getElementById("status");
     const newGameBtn = document.getElementById("newGameBtn");
-    const refreshBtn = document.getElementById("refreshBtn");
+
     const engineListEl = document.getElementById("engine-list");
     const playWhiteBtn = document.getElementById("playWhiteBtn");
     const playBlackBtn = document.getElementById("playBlackBtn");
@@ -413,7 +412,7 @@ HTML = """<!doctype html>
       selected = null;
       await loadState();
     };
-    refreshBtn.onclick = () => loadState();
+
 
     renderEngineList();
     loadState();
