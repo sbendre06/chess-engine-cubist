@@ -26,6 +26,7 @@ import chess
 import chess.variant
 
 from evaluation.correctness_fixtures import (
+    TIER0_FIXTURES,
     TIER1_FIXTURES,
     TIER2_FIXTURES,
     Tier1Fixture,
@@ -51,11 +52,17 @@ class TestResult:
 @dataclass
 class EngineCorrectnessReport:
     engine_name: str
+    tier0_passed: int
+    tier0_total: int
     tier1_passed: int
     tier1_total: int
     tier2_passed: int
     tier2_total: int
     results: list[TestResult] = field(default_factory=list)
+
+    @property
+    def tier0_pass_rate(self) -> float:
+        return self.tier0_passed / self.tier0_total if self.tier0_total else 0.0
 
     @property
     def tier1_pass_rate(self) -> float:
@@ -71,7 +78,7 @@ def _filter_legal(board: chess.variant.AntichessBoard, candidates) -> set[str]:
     return {m.uci() for m in candidates if m in legal}
 
 
-def _run_tier1_fixture(engine: ModuleType, fx: Tier1Fixture) -> TestResult:
+def _run_tier1_fixture(engine: ModuleType, fx: Tier1Fixture, tier: int = 1) -> TestResult:
     start = time.perf_counter()
     board = chess.variant.AntichessBoard(fx.fen)
     legal_uci = {m.uci() for m in board.legal_moves}
@@ -152,7 +159,7 @@ def _run_tier1_fixture(engine: ModuleType, fx: Tier1Fixture) -> TestResult:
         detail = f"exception: {type(exc).__name__}: {exc}"
 
     elapsed = time.perf_counter() - start
-    return TestResult(test_id=fx.test_id, tier=1, passed=passed, detail=detail, elapsed_s=elapsed)
+    return TestResult(test_id=fx.test_id, tier=tier, passed=passed, detail=detail, elapsed_s=elapsed)
 
 
 def _run_tier2_fixture(engine: ModuleType, fx: Tier2Fixture, depth_override: int | None) -> TestResult:
@@ -175,8 +182,12 @@ def _run_tier2_fixture(engine: ModuleType, fx: Tier2Fixture, depth_override: int
     return TestResult(test_id=fx.test_id, tier=2, passed=passed, detail=detail, elapsed_s=elapsed)
 
 
+def run_tier0(engine: ModuleType) -> list[TestResult]:
+    return [_run_tier1_fixture(engine, fx, tier=0) for fx in TIER0_FIXTURES]
+
+
 def run_tier1(engine: ModuleType) -> list[TestResult]:
-    return [_run_tier1_fixture(engine, fx) for fx in TIER1_FIXTURES]
+    return [_run_tier1_fixture(engine, fx, tier=1) for fx in TIER1_FIXTURES]
 
 
 def run_tier2(engine: ModuleType, depth: int | None = None) -> list[TestResult]:
@@ -185,15 +196,18 @@ def run_tier2(engine: ModuleType, depth: int | None = None) -> list[TestResult]:
 
 def run_all(engine_name: str, depth: int | None = None) -> EngineCorrectnessReport:
     engine = load_engine(engine_name)
+    t0 = run_tier0(engine)
     t1 = run_tier1(engine)
     t2 = run_tier2(engine, depth=depth)
     return EngineCorrectnessReport(
         engine_name=engine_name,
+        tier0_passed=sum(1 for r in t0 if r.passed),
+        tier0_total=len(t0),
         tier1_passed=sum(1 for r in t1 if r.passed),
         tier1_total=len(t1),
         tier2_passed=sum(1 for r in t2 if r.passed),
         tier2_total=len(t2),
-        results=t1 + t2,
+        results=t0 + t1 + t2,
     )
 
 
@@ -202,10 +216,13 @@ def write_report_json(report: EngineCorrectnessReport) -> Path:
     path = RESULTS_DIR / f"{report.engine_name}.json"
     payload = {
         "engine_name": report.engine_name,
+        "tier0_passed": report.tier0_passed,
+        "tier0_total": report.tier0_total,
         "tier1_passed": report.tier1_passed,
         "tier1_total": report.tier1_total,
         "tier2_passed": report.tier2_passed,
         "tier2_total": report.tier2_total,
+        "tier0_pass_rate": report.tier0_pass_rate,
         "tier1_pass_rate": report.tier1_pass_rate,
         "tier2_pass_rate": report.tier2_pass_rate,
         "results": [asdict(r) for r in report.results],
@@ -215,15 +232,21 @@ def write_report_json(report: EngineCorrectnessReport) -> Path:
     return path
 
 
-def print_human_report(report: EngineCorrectnessReport) -> None:
+def print_human_report(report: EngineCorrectnessReport, *, verbose: bool = True) -> None:
     print(f"=== {report.engine_name} ===")
-    print(f"Tier 1 (rule compliance): {report.tier1_passed}/{report.tier1_total} "
+    print(f"Tier 0 (broad coverage):   {report.tier0_passed}/{report.tier0_total} "
+          f"({report.tier0_pass_rate:.0%})")
+    print(f"Tier 1 (rule compliance):  {report.tier1_passed}/{report.tier1_total} "
           f"({report.tier1_pass_rate:.0%})")
-    print(f"Tier 2 (strategic):       {report.tier2_passed}/{report.tier2_total} "
+    print(f"Tier 2 (strategic):        {report.tier2_passed}/{report.tier2_total} "
           f"({report.tier2_pass_rate:.0%})")
-    for r in report.results:
-        flag = "PASS" if r.passed else "FAIL"
-        print(f"  [{flag}] T{r.tier} {r.test_id} ({r.elapsed_s*1000:.0f}ms): {r.detail}")
+    if verbose:
+        for r in report.results:
+            # Skip Tier 0 passes to keep the per-engine report short; show only failures + Tier 1/2.
+            if r.tier == 0 and r.passed:
+                continue
+            flag = "PASS" if r.passed else "FAIL"
+            print(f"  [{flag}] T{r.tier} {r.test_id} ({r.elapsed_s*1000:.0f}ms): {r.detail}")
     print()
 
 
@@ -236,6 +259,12 @@ def validate_fixtures() -> list[str]:
     board, terminal fixtures whose claimed winner disagrees with python-chess.
     """
     errors: list[str] = []
+
+    for fx in TIER0_FIXTURES:
+        try:
+            chess.variant.AntichessBoard(fx.fen)
+        except Exception as exc:
+            errors.append(f"[T0 {fx.test_id}] FEN parse error: {exc}")
 
     for fx in TIER1_FIXTURES:
         try:
@@ -333,8 +362,8 @@ def main(argv: list[str] | None = None) -> int:
             for e in errors:
                 print(f"  {e}", file=sys.stderr)
             return 1
-        print(f"Fixture validation OK ({len(TIER1_FIXTURES)} Tier 1, "
-              f"{len(TIER2_FIXTURES)} Tier 2).")
+        print(f"Fixture validation OK ({len(TIER0_FIXTURES)} Tier 0, "
+              f"{len(TIER1_FIXTURES)} Tier 1, {len(TIER2_FIXTURES)} Tier 2).")
         return 0
 
     if args.all:
@@ -360,8 +389,11 @@ def main(argv: list[str] | None = None) -> int:
             [
                 {
                     "engine_name": r.engine_name,
+                    "tier0_pass_rate": r.tier0_pass_rate,
                     "tier1_pass_rate": r.tier1_pass_rate,
                     "tier2_pass_rate": r.tier2_pass_rate,
+                    "tier0_passed": r.tier0_passed,
+                    "tier0_total": r.tier0_total,
                     "tier1_passed": r.tier1_passed,
                     "tier1_total": r.tier1_total,
                     "tier2_passed": r.tier2_passed,
@@ -376,9 +408,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.all:
         print("=== Summary ===")
-        print(f"{'engine':<40} {'T1':>10} {'T2':>10}")
+        print(f"{'engine':<40} {'T0':>10} {'T1':>10} {'T2':>10}")
         for r in reports:
-            print(f"{r.engine_name:<40} {r.tier1_passed:>3}/{r.tier1_total:<3}    "
+            print(f"{r.engine_name:<40} "
+                  f"{r.tier0_passed:>3}/{r.tier0_total:<3}    "
+                  f"{r.tier1_passed:>3}/{r.tier1_total:<3}    "
                   f"{r.tier2_passed:>3}/{r.tier2_total:<3}")
 
     return 0

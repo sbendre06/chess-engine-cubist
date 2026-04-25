@@ -42,8 +42,15 @@ def render_heatmap(
     show_totals: bool,
     out_path: Path,
     title: str,
+    totals_source: list[tuple[str, int]] | None = None,
 ) -> None:
-    """tests are (test_id, tier) tuples in display order."""
+    """tests are (test_id, tier) tuples in display order.
+
+    totals_source defaults to `tests` -- pass the unfiltered list to make the
+    bottom annotation reflect ALL tier scores even when tier 0 rows are hidden.
+    """
+    if totals_source is None:
+        totals_source = tests
 
     grid = np.array(
         [[1 if matrix[name].get(tid) else 0 for name in engines] for tid, _ in tests],
@@ -100,43 +107,36 @@ def render_heatmap(
             if tier != tests[j + 1][1]:
                 ax.axvline(j + 0.5, color=DIVIDER_COLOR, linewidth=2.0)
 
-    # Per-engine totals -- placed below the matrix in their own annotated row
+    # Per-engine totals -- placed below the matrix in their own annotated row.
+    # Use totals_source (unfiltered) so T0 score still shows when T0 rows are hidden.
+    def _tier_label(name: str) -> list[str]:
+        out = []
+        for tier_n, tag in ((0, "T0"), (1, "T1"), (2, "T2")):
+            n = sum(1 for tid, t in totals_source if t == tier_n)
+            if not n:
+                continue
+            p = sum(1 for tid, t in totals_source if t == tier_n and matrix[name].get(tid))
+            out.append(f"{tag} {p}/{n}")
+        return out
+
     if show_totals and not transpose:
         for j, name in enumerate(engines):
-            t1p = sum(1 for tid, t in tests if t == 1 and matrix[name].get(tid))
-            t1n = sum(1 for tid, t in tests if t == 1)
-            t2p = sum(1 for tid, t in tests if t == 2 and matrix[name].get(tid))
-            t2n = sum(1 for tid, t in tests if t == 2)
-            line = []
-            if t1n:
-                line.append(f"T1 {t1p}/{t1n}")
-            if t2n:
-                line.append(f"T2 {t2p}/{t2n}")
-            ax.text(j, n_rows + 0.05, "\n".join(line),
+            ax.text(j, n_rows + 0.05, "\n".join(_tier_label(name)),
                     ha="center", va="top", fontsize=8.5, family="monospace",
                     color="#222222",
                     bbox=dict(boxstyle="round,pad=0.25", facecolor="#f3f3f3",
                               edgecolor="#cccccc", linewidth=0.6))
-        # Pad the bottom so the annotation has room
-        ax.set_ylim(n_rows + 1.4, -0.5)
+        # Pad the bottom so the annotation has room (3 tiers needs more)
+        ax.set_ylim(n_rows + 2.0, -0.5)
 
     if show_totals and transpose:
         for i, name in enumerate(engines):
-            t1p = sum(1 for tid, t in tests if t == 1 and matrix[name].get(tid))
-            t1n = sum(1 for tid, t in tests if t == 1)
-            t2p = sum(1 for tid, t in tests if t == 2 and matrix[name].get(tid))
-            t2n = sum(1 for tid, t in tests if t == 2)
-            label = []
-            if t1n:
-                label.append(f"T1 {t1p}/{t1n}")
-            if t2n:
-                label.append(f"T2 {t2p}/{t2n}")
-            ax.text(n_cols + 0.05, i, "  ".join(label),
+            ax.text(n_cols + 0.05, i, "  ".join(_tier_label(name)),
                     ha="left", va="center", fontsize=8.5, family="monospace",
                     color="#222222",
                     bbox=dict(boxstyle="round,pad=0.25", facecolor="#f3f3f3",
                               edgecolor="#cccccc", linewidth=0.6))
-        ax.set_xlim(-0.5, n_cols + 2.5)
+        ax.set_xlim(-0.5, n_cols + 3.5)
 
     ax.set_title(title, fontsize=13, pad=18, loc="left", fontweight="bold")
     plt.tight_layout()
@@ -153,17 +153,24 @@ def main(argv: list[str] | None = None) -> int:
                    help="output PNG path (default: evaluation/results/correctness_matrix.png)")
     p.add_argument("--transpose", action="store_true",
                    help="rows = engines, cols = tests (default: rows = tests)")
-    p.add_argument("--tier", type=int, choices=(1, 2),
+    p.add_argument("--tier", type=int, choices=(0, 1, 2),
                    help="filter to one tier only")
+    p.add_argument("--include-tier0", action="store_true",
+                   help="include Tier 0 (50 broad coverage tests). Default: omit, "
+                        "since they're typically all-pass and add visual noise. "
+                        "Tier 0 totals still appear in the bottom annotation.")
     p.add_argument("--no-totals", action="store_true",
-                   help="omit per-engine T1/T2 score annotations")
+                   help="omit per-engine T0/T1/T2 score annotations")
     p.add_argument("--results-dir", type=Path, default=RESULTS_DIR,
                    help="override results directory")
     p.add_argument("--title", type=str, default=TITLE)
     args = p.parse_args(argv if argv is not None else sys.argv[1:])
 
     engines, test_order, matrix = load_all_results(args.results_dir)
-    tests = filter_tests(test_order, args.tier)
+    if args.tier is not None:
+        tests = filter_tests(test_order, args.tier)
+    else:
+        tests = test_order if args.include_tier0 else [t for t in test_order if t[1] != 0]
 
     render_heatmap(
         engines, tests, matrix,
@@ -171,6 +178,8 @@ def main(argv: list[str] | None = None) -> int:
         show_totals=not args.no_totals,
         out_path=args.out,
         title=args.title,
+        # Pass full test_order so totals annotation can include T0 even when rows are filtered
+        totals_source=test_order,
     )
     print(f"wrote {args.out}")
     return 0

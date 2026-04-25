@@ -59,6 +59,14 @@ def filter_tests(test_order: list[tuple[str, int]], tier: int | None) -> list[tu
     return [t for t in test_order if t[1] == tier]
 
 
+def _tier_score(tests: list[tuple[str, int]], matrix: dict[str, dict[str, bool]],
+                engine: str, tier_n: int) -> str:
+    """Return 'p/n' for the given engine within the given tier (or '0/0' if absent)."""
+    p = sum(1 for tid, t in tests if t == tier_n and matrix[engine].get(tid))
+    n = sum(1 for tid, t in tests if t == tier_n)
+    return f"{p}/{n}"
+
+
 def render_markdown(engines, tests, matrix, transpose, totals) -> str:
     pass_g, fail_g = PASS_MD, FAIL_MD
     lines: list[str] = []
@@ -66,18 +74,14 @@ def render_markdown(engines, tests, matrix, transpose, totals) -> str:
         # rows = engines, cols = tests
         header = ["engine"] + [f"T{tier} {tid}" for tid, tier in tests]
         if totals:
-            header += ["T1", "T2"]
+            header += ["T0", "T1", "T2"]
         lines.append("| " + " | ".join(header) + " |")
         lines.append("|" + "---|" * len(header))
         for name in engines:
             cells = [pass_g if matrix[name].get(tid) else fail_g for tid, _ in tests]
             row = [name] + cells
             if totals:
-                t1p = sum(1 for tid, t in tests if t == 1 and matrix[name].get(tid))
-                t1n = sum(1 for tid, t in tests if t == 1)
-                t2p = sum(1 for tid, t in tests if t == 2 and matrix[name].get(tid))
-                t2n = sum(1 for tid, t in tests if t == 2)
-                row += [f"{t1p}/{t1n}", f"{t2p}/{t2n}"]
+                row += [_tier_score(tests, matrix, name, tier_n) for tier_n in (0, 1, 2)]
             lines.append("| " + " | ".join(row) + " |")
     else:
         # rows = tests, cols = engines (default)
@@ -88,17 +92,9 @@ def render_markdown(engines, tests, matrix, transpose, totals) -> str:
             cells = [pass_g if matrix[name].get(tid) else fail_g for name in engines]
             lines.append(f"| T{tier} `{tid}` | " + " | ".join(cells) + " |")
         if totals:
-            t1_row = ["**Tier 1 total**"]
-            t2_row = ["**Tier 2 total**"]
-            for name in engines:
-                t1p = sum(1 for tid, t in tests if t == 1 and matrix[name].get(tid))
-                t1n = sum(1 for tid, t in tests if t == 1)
-                t2p = sum(1 for tid, t in tests if t == 2 and matrix[name].get(tid))
-                t2n = sum(1 for tid, t in tests if t == 2)
-                t1_row.append(f"{t1p}/{t1n}")
-                t2_row.append(f"{t2p}/{t2n}")
-            lines.append("| " + " | ".join(t1_row) + " |")
-            lines.append("| " + " | ".join(t2_row) + " |")
+            for tier_n, label in ((0, "**Tier 0 total**"), (1, "**Tier 1 total**"), (2, "**Tier 2 total**")):
+                row = [label] + [_tier_score(tests, matrix, name, tier_n) for name in engines]
+                lines.append("| " + " | ".join(row) + " |")
     return "\n".join(lines) + "\n"
 
 
@@ -108,28 +104,20 @@ def render_csv(engines, tests, matrix, transpose, totals) -> str:
     if transpose:
         header = ["engine"] + [f"T{tier}_{tid}" for tid, tier in tests]
         if totals:
-            header += ["T1_score", "T2_score"]
+            header += ["T0_score", "T1_score", "T2_score"]
         writer.writerow(header)
         for name in engines:
             row = [name] + ["pass" if matrix[name].get(tid) else "fail" for tid, _ in tests]
             if totals:
-                t1p = sum(1 for tid, t in tests if t == 1 and matrix[name].get(tid))
-                t1n = sum(1 for tid, t in tests if t == 1)
-                t2p = sum(1 for tid, t in tests if t == 2 and matrix[name].get(tid))
-                t2n = sum(1 for tid, t in tests if t == 2)
-                row += [f"{t1p}/{t1n}", f"{t2p}/{t2n}"]
+                row += [_tier_score(tests, matrix, name, tier_n) for tier_n in (0, 1, 2)]
             writer.writerow(row)
     else:
         writer.writerow(["test_id", "tier"] + engines)
         for tid, tier in tests:
             writer.writerow([tid, tier] + ["pass" if matrix[name].get(tid) else "fail" for name in engines])
         if totals:
-            for tier_n, label in ((1, "TIER1_TOTAL"), (2, "TIER2_TOTAL")):
-                row = [label, tier_n]
-                for name in engines:
-                    p = sum(1 for tid, t in tests if t == tier_n and matrix[name].get(tid))
-                    n = sum(1 for tid, t in tests if t == tier_n)
-                    row.append(f"{p}/{n}")
+            for tier_n, label in ((0, "TIER0_TOTAL"), (1, "TIER1_TOTAL"), (2, "TIER2_TOTAL")):
+                row = [label, tier_n] + [_tier_score(tests, matrix, name, tier_n) for name in engines]
                 writer.writerow(row)
     return "".join(buf)
 
@@ -143,17 +131,13 @@ def render_plain(engines, tests, matrix, transpose, totals) -> str:
             col_w = max(col_w, len(label) + 2)
         header = "engine".ljust(col_w) + "".join(label.ljust(col_w) for label in test_labels)
         if totals:
-            header += "T1".ljust(8) + "T2".ljust(8)
+            header += "T0".ljust(10) + "T1".ljust(10) + "T2".ljust(10)
         lines = [header, "-" * len(header)]
         for name in engines:
             cells = [(pass_g if matrix[name].get(tid) else fail_g).ljust(col_w) for tid, _ in tests]
             line = name.ljust(col_w) + "".join(cells)
             if totals:
-                t1p = sum(1 for tid, t in tests if t == 1 and matrix[name].get(tid))
-                t1n = sum(1 for tid, t in tests if t == 1)
-                t2p = sum(1 for tid, t in tests if t == 2 and matrix[name].get(tid))
-                t2n = sum(1 for tid, t in tests if t == 2)
-                line += f"{t1p}/{t1n}".ljust(8) + f"{t2p}/{t2n}".ljust(8)
+                line += "".join(_tier_score(tests, matrix, name, tier_n).ljust(10) for tier_n in (0, 1, 2))
             lines.append(line)
         return "\n".join(lines) + "\n"
     else:
@@ -165,12 +149,8 @@ def render_plain(engines, tests, matrix, transpose, totals) -> str:
             cells = [(pass_g if matrix[name].get(tid) else fail_g).ljust(eng_col) for name in engines]
             lines.append(f"T{tier} {tid}".ljust(test_col) + "".join(cells))
         if totals:
-            for tier_n, label in ((1, "Tier 1 total"), (2, "Tier 2 total")):
-                cells = []
-                for name in engines:
-                    p = sum(1 for tid, t in tests if t == tier_n and matrix[name].get(tid))
-                    n = sum(1 for tid, t in tests if t == tier_n)
-                    cells.append(f"{p}/{n}".ljust(eng_col))
+            for tier_n, label in ((0, "Tier 0 total"), (1, "Tier 1 total"), (2, "Tier 2 total")):
+                cells = [_tier_score(tests, matrix, name, tier_n).ljust(eng_col) for name in engines]
                 lines.append(label.ljust(test_col) + "".join(cells))
         return "\n".join(lines) + "\n"
 
@@ -189,7 +169,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--format", choices=("markdown", "csv", "plain"), default="markdown")
     p.add_argument("--transpose", action="store_true",
                    help="rows = engines, cols = tests (default: rows = tests, cols = engines)")
-    p.add_argument("--tier", type=int, choices=(1, 2),
+    p.add_argument("--tier", type=int, choices=(0, 1, 2),
                    help="filter to one tier only")
     p.add_argument("--no-totals", action="store_true",
                    help="omit per-engine T1/T2 score rows/columns")

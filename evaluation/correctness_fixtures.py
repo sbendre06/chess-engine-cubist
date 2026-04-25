@@ -1,21 +1,29 @@
 """Hidden FEN fixtures for the antichess correctness suite.
 
-Two tiers:
-  Tier 1 -- rule compliance, evaluated by calling the Core 3 engine primitives
-            directly on a curated position. No search.
-  Tier 2 -- strategic decision quality, evaluated by running the engine through
-            the harness's iterative_deepening at fixed depth and inspecting the
-            chosen root move.
+Three tiers:
+  Tier 0 -- broad correctness coverage. 50 positions sampled by random-legal-move
+            walks from the start position; each asserts the engine's move
+            generator agrees with python-chess on a typical board (not an edge
+            case). Reproducible via fixed seed.
+  Tier 1 -- targeted rule compliance. ~14 hand-curated edge cases that exercise
+            specific antichess-vs-standard-chess prior conflicts (forced
+            capture, no castling, promotion-to-king, stalemate-as-win, etc.).
+  Tier 2 -- strategic decision quality. ~7 search-driven puzzles, including
+            Watkins-derived openings and forced-win endgames.
 
-Every fixture carries a `note` documenting the rule under test and (for Tier 2)
-the source of the expected move(s). All FENs use chess.variant.AntichessBoard
-(Giveaway rules, matching the engines under test).
+Every fixture carries a `note`. Tier 1/2 notes document the rule or strategic
+principle under test; Tier 0 notes record the seed/ply/legal-count provenance.
+All FENs use chess.variant.AntichessBoard (Giveaway rules).
 """
 
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass
 from typing import Literal
+
+import chess
+import chess.variant
 
 
 Tier1Rule = Literal[
@@ -28,6 +36,12 @@ Tier1Rule = Literal[
     "terminal_winner",        # board.outcome().winner == expected.winner_color
     "not_terminal",           # board.is_game_over() must be False
 ]
+
+
+# Reproducible random-walk seed for the generated coverage corpus. Changing
+# this number reshuffles the entire corpus, so leave it pinned.
+RANDOM_WALK_SEED = 42
+RANDOM_WALK_COUNT = 50
 
 
 @dataclass(frozen=True)
@@ -224,5 +238,56 @@ TIER2_FIXTURES: list[Tier2Fixture] = [
 ]
 
 
-def all_fixtures() -> tuple[list[Tier1Fixture], list[Tier2Fixture]]:
-    return TIER1_FIXTURES, TIER2_FIXTURES
+def _generate_tier0_fixtures(seed: int, count: int) -> list[Tier1Fixture]:
+    """Sample positions from random-legal-move antichess walks.
+
+    Each sampled position becomes a `move_gen_superset` fixture: the engine's
+    filtered pseudo-legal output must contain every move in board.legal_moves.
+    This is the broadest antichess correctness check -- it asks "does the
+    engine's move generator agree with python-chess on a wide variety of
+    boards?" without focusing on any specific edge case.
+
+    Deterministic given the seed, so the corpus is stable across runs.
+    Reuses Tier1Fixture as the data shape since the rule semantics are the
+    same; tier membership is determined by which list a fixture lives in.
+    """
+    rng = random.Random(seed)
+    fixtures: list[Tier1Fixture] = []
+    attempts = 0
+    while len(fixtures) < count and attempts < count * 20:
+        attempts += 1
+        board = chess.variant.AntichessBoard()
+        target_ply = rng.randint(2, 30)
+        plies = 0
+        while plies < target_ply and not board.is_game_over():
+            moves = list(board.legal_moves)
+            if not moves:
+                break
+            board.push(rng.choice(moves))
+            plies += 1
+        if board.is_game_over():
+            continue
+        if not list(board.legal_moves):
+            continue
+        fen = board.fen()
+        idx = len(fixtures)
+        fixtures.append(Tier1Fixture(
+            test_id=f"random_walk_{idx:02d}",
+            fen=fen,
+            rule="move_gen_superset",
+            expected={},
+            note=(
+                f"Random-walk sample (seed={seed}, ply={plies}, "
+                f"n_legal={len(list(board.legal_moves))}). Engine's filtered "
+                f"pseudo-legal output must include every move in board.legal_moves."
+            ),
+        ))
+    return fixtures
+
+
+# Tier 0: broad coverage corpus, generated deterministically.
+TIER0_FIXTURES: list[Tier1Fixture] = _generate_tier0_fixtures(RANDOM_WALK_SEED, RANDOM_WALK_COUNT)
+
+
+def all_fixtures() -> tuple[list[Tier1Fixture], list[Tier1Fixture], list[Tier2Fixture]]:
+    return TIER0_FIXTURES, TIER1_FIXTURES, TIER2_FIXTURES

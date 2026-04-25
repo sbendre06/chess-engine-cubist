@@ -19,6 +19,7 @@ EXPERIMENT_LOG_FIELDS = [
     "wall_time_minutes",
     "interventions",
     "engine_winrate",
+    "tier0_pass_rate",
     "tier1_pass_rate",
     "tier2_pass_rate",
 ]
@@ -110,19 +111,21 @@ def list_engines() -> list[str]:
     return names
 
 
-def read_correctness_pass_rates(engine_name: str) -> tuple[str, str]:
-    """Return (tier1_pass_rate, tier2_pass_rate) as 4-decimal strings, or ('','') if absent."""
+def read_correctness_pass_rates(engine_name: str) -> tuple[str, str, str]:
+    """Return (tier0, tier1, tier2) pass rates as 4-decimal strings, or '' for missing."""
     path = CORRECTNESS_RESULTS_DIR / f"{engine_name}.json"
     if not path.exists():
-        return ("", "")
+        return ("", "", "")
     try:
         with path.open("r", encoding="utf-8") as handle:
             data = json.load(handle)
     except (OSError, json.JSONDecodeError):
-        return ("", "")
+        return ("", "", "")
+    t0 = data.get("tier0_pass_rate")
     t1 = data.get("tier1_pass_rate")
     t2 = data.get("tier2_pass_rate")
     return (
+        f"{t0:.4f}" if isinstance(t0, (int, float)) else "",
         f"{t1:.4f}" if isinstance(t1, (int, float)) else "",
         f"{t2:.4f}" if isinstance(t2, (int, float)) else "",
     )
@@ -146,15 +149,18 @@ def update_experiment_log_winrates(name_to_winrate: dict[str, float]) -> None:
 
     # Backfill new columns on any pre-existing rows so the CSV stays well-formed.
     for r in rows:
+        r.setdefault("tier0_pass_rate", "")
         r.setdefault("tier1_pass_rate", "")
         r.setdefault("tier2_pass_rate", "")
 
     by_name = {r["experiment_name"]: r for r in rows}
     for name, winrate in name_to_winrate.items():
         wr_str = f"{winrate:.4f}"
-        t1_str, t2_str = read_correctness_pass_rates(name)
+        t0_str, t1_str, t2_str = read_correctness_pass_rates(name)
         if name in by_name:
             by_name[name]["engine_winrate"] = wr_str
+            if t0_str:
+                by_name[name]["tier0_pass_rate"] = t0_str
             if t1_str:
                 by_name[name]["tier1_pass_rate"] = t1_str
             if t2_str:
@@ -168,6 +174,7 @@ def update_experiment_log_winrates(name_to_winrate: dict[str, float]) -> None:
                     "wall_time_minutes": "",
                     "interventions": "",
                     "engine_winrate": wr_str,
+                    "tier0_pass_rate": t0_str,
                     "tier1_pass_rate": t1_str,
                     "tier2_pass_rate": t2_str,
                 }

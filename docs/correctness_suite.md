@@ -1,6 +1,14 @@
 # Hidden Antichess Correctness Suite
 
-A two-tier objective rubric for the Cubist ablation experiment. Every engine in `engines/` is scored against curated FEN positions; results land in `evaluation/results/correctness/<engine>.json` and feed two new columns in `experiment_log.csv`.
+A three-tier objective rubric for the Cubist ablation experiment. Every engine in `engines/` is scored against curated FEN positions; results land in `evaluation/results/correctness/<engine>.json` and feed three new columns in `experiment_log.csv` (`tier0_pass_rate`, `tier1_pass_rate`, `tier2_pass_rate`).
+
+The three tiers test different things:
+
+| Tier | Count | What it measures | How |
+|---|---|---|---|
+| **Tier 0** | 50 | Broad correctness coverage on typical positions | Random-walk sample, deterministic seed; each fixture asserts engine's filtered pseudo-legal output ⊇ `board.legal_moves` |
+| **Tier 1** | 14 | Targeted antichess-vs-standard-chess prior conflicts | Hand-curated edge cases (forced capture, no castling, promotion-to-king, stalemate-as-win, king-attacked-but-quiet-moves-legal, etc.) |
+| **Tier 2** | 7 | Strategic decision quality at fixed search depth | Watkins-derived openings, pawn-push endgames, forced-win positions; engine drives `iterative_deepening` and the chosen root move is checked against an `expected_moves` set |
 
 ## How to run
 
@@ -9,6 +17,8 @@ A two-tier objective rubric for the Cubist ablation experiment. Every engine in 
 .venv/bin/python -m evaluation.correctness --all --depth 4         # full ablation matrix
 .venv/bin/python -m evaluation.correctness --validate-fixtures     # FEN sanity check
 .venv/bin/python -m evaluation.correctness --all --json            # machine-readable
+.venv/bin/python -m evaluation.correctness_matrix                  # rendered pass/fail table
+.venv/bin/python -m evaluation.correctness_plot                    # heatmap PNG
 ```
 
 ## Architectural assumptions
@@ -26,7 +36,24 @@ Two ground rules shape what is and isn't testable:
 1. **The harness already filters illegal moves.** `harness/engine.py:106` runs `[m for m in candidates if m in board.legal_moves]` before any move is played. That means engines literally cannot play illegal moves in real matches — so the suite isn't catching cheaters; it's surfacing whether the engine *itself* understands the rules, independent of the safety net.
 2. **`chess.variant.AntichessBoard` enforces Giveaway rules.** Forced capture, no castling, king-capturable, promotion-to-king, and stalemate-as-win-for-stalemated-side are all built in. Engines that delegate to `board.legal_moves` get those for free.
 
-## Tier 1 — Rule Compliance
+## Tier 0 — Broad Correctness Coverage
+
+50 positions sampled by random-legal-move walks from the standard antichess starting position. Generation is deterministic (`RANDOM_WALK_SEED = 42`), so the corpus is stable across runs.
+
+Each fixture uses the `move_gen_superset` rule: the engine's filtered pseudo-legal output must contain every move in `board.legal_moves` (no legal move dropped). This is the most basic correctness signal — "does the engine's move generator agree with python-chess on a typical board?"
+
+Sample distribution:
+- Ply depth: 5–30 (avg ~15)
+- Legal-move count per position: 1–41
+- Mix of forced-capture and open positions, plus a few near-endgame positions
+
+Test IDs: `random_walk_00` through `random_walk_49`.
+
+Currently every engine passes all 50 Tier 0 tests. That's expected — every engine in the project delegates move generation to `chess.variant.AntichessBoard.pseudo_legal_moves` (or its filtered cousin), which by construction agrees with `board.legal_moves`. The narrative this enables: **"every engine handles 50 random positions correctly. The differential only appears on hand-crafted prior-conflict edge cases (Tier 1) and strategic depth (Tier 2)."**
+
+If a future engine implements its own move generator from scratch, Tier 0 is where bugs would surface first.
+
+## Tier 1 — Targeted Rule Compliance
 
 Calls Core 3 primitives directly on a curated position. No search. Eight rule types:
 
@@ -169,31 +196,36 @@ Per-engine JSON (`evaluation/results/correctness/<engine>.json`) carries:
 ```json
 {
   "engine_name": "...",
+  "tier0_passed": 50, "tier0_total": 50,
   "tier1_passed": 14, "tier1_total": 14,
   "tier2_passed": 5,  "tier2_total": 7,
-  "tier1_pass_rate": 1.0, "tier2_pass_rate": 0.71,
-  "results": [{ "test_id": "...", "tier": 1, "passed": true, "detail": "ok", "elapsed_s": 0.0001 }, ...]
+  "tier0_pass_rate": 1.0, "tier1_pass_rate": 1.0, "tier2_pass_rate": 0.71,
+  "results": [{ "test_id": "...", "tier": 0, "passed": true, "detail": "ok", "elapsed_s": 0.0001 }, ...]
 }
 ```
 
-Two columns flow into `experiment_log.csv` via `evaluation.report.update_experiment_log_winrates`: `tier1_pass_rate` and `tier2_pass_rate`. They populate from the per-engine JSON when `update_experiment_log_winrates` runs (after a tournament).
+Three columns flow into `experiment_log.csv` via `evaluation.report.update_experiment_log_winrates`: `tier0_pass_rate`, `tier1_pass_rate`, `tier2_pass_rate`. They populate from the per-engine JSON when `update_experiment_log_winrates` runs (after a tournament).
 
 ### Current ablation matrix (depth 4)
 
-| Engine | T1 | T2 |
-|---|---|---|
-| baseline | 14/14 | 3/7 |
-| yesarch_yessttrat_noplan | 14/14 | 3/7 |
-| arch1-strat1-plan1 | 13/14 | 4/7 |
-| noarch_nostrat_yesplan | 13/14 | 3/7 |
-| yesarch-nostrat-yesplan | 13/14 | 5/7 |
-| yesarch_yesstrat_yesplan_p1 | 13/14 | 4/7 |
-| caveman | 12/14 | 4/7 |
-| noarch_yesstrat_noplan | 12/14 | 5/7 |
-| yesarch_nostrat_noplan | 12/14 | 3/7 |
-| **noarch_nostrat_noplan** | **11/14** | 3/7 |
+| Engine | T0 | T1 | T2 |
+|---|---|---|---|
+| baseline | 50/50 | 14/14 | 3/7 |
+| yesarch_yessttrat_noplan | 50/50 | 14/14 | 3/7 |
+| arch1-strat1-plan1 | 50/50 | 13/14 | 4/7 |
+| noarch_nostrat_yesplan | 50/50 | 13/14 | 3/7 |
+| yesarch-nostrat-yesplan | 50/50 | 13/14 | 5/7 |
+| yesarch_yesstrat_yesplan_p1 | 50/50 | 13/14 | 4/7 |
+| caveman | 50/50 | 12/14 | 4/7 |
+| noarch_yesstrat_noplan | 50/50 | 12/14 | 5/7 |
+| yesarch_nostrat_noplan | 50/50 | 12/14 | 3/7 |
+| **noarch_nostrat_noplan** | 50/50 | **11/14** | 3/7 |
 
-`noarch_nostrat_noplan` (full ablation) bottoms Tier 1 with three rule-class failures: `no_castling_white`, `no_castling_black`, and `inverted_material_white_winning` (uses standard chess material values). Strategy-prompted engines (`noarch_yesstrat_noplan`, `yesarch-nostrat-yesplan`) lead Tier 2 at 5/7. Baseline tops Tier 1 (perfect rule compliance) but trails Tier 2 because it's intentionally a minimal material+mobility engine, not a Watkins-aware one.
+Every engine clears Tier 0 — they all delegate to python-chess's move generator, which agrees with itself by construction. `noarch_nostrat_noplan` (full ablation) bottoms Tier 1 with three rule-class failures: `no_castling_white`, `no_castling_black`, and `inverted_material_white_winning` (uses standard chess material values). Strategy-prompted engines (`noarch_yesstrat_noplan`, `yesarch-nostrat-yesplan`) lead Tier 2 at 5/7. Baseline tops Tier 1 (perfect rule compliance) but trails Tier 2 because it's intentionally a minimal material+mobility engine, not a Watkins-aware one.
+
+### Visualization
+
+`python -m evaluation.correctness_plot` writes `evaluation/results/correctness_matrix.png` — a heatmap with green = pass / red = fail, tier divider lines, and per-engine T0/T1/T2 score boxes. Defaults to showing Tier 1 + Tier 2 rows only (since Tier 0 is uniformly green and dominates the canvas); pass `--include-tier0` for the full 71-row matrix.
 
 ## What this suite deliberately does not do
 
