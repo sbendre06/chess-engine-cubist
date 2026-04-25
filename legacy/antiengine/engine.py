@@ -17,12 +17,12 @@ from __future__ import annotations
 import threading
 from dataclasses import replace
 
-from antiengine.board import EngineState
-from antiengine.constants import ENGINE_AUTHOR, ENGINE_NAME, ENGINE_VERSION
-from antiengine.eval import AntichessEvaluator
-from antiengine.search import iterative_deepening
-from antiengine.tt import TranspositionTable
-from antiengine.types import SearchConfig
+from legacy.antiengine.board import EngineState
+from legacy.antiengine.constants import ENGINE_AUTHOR, ENGINE_NAME, ENGINE_VERSION
+from legacy.antiengine.eval import AntichessEvaluator
+from legacy.antiengine.search import iterative_deepening
+from legacy.antiengine.tt import TranspositionTable
+from legacy.antiengine.types import SearchConfig
 
 class UCIEngine:
     """Top-level engine object used by uci.py."""

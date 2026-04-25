@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import sys
 
-from antiengine.engine import UCIEngine
+from legacy.antiengine.engine import UCIEngine
 
 
 def main() -> None:

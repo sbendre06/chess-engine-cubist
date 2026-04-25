@@ -35,7 +35,7 @@ from dataclasses import asdict, is_dataclass
 
 import chess
 
-from antiengine.constants import DEFAULT_EVAL_WEIGHTS, PIECE_ORDER_VALUE
+from legacy.antiengine.constants import DEFAULT_EVAL_WEIGHTS, PIECE_ORDER_VALUE
 
 
 def _material_for_color(board: chess.Board, color: chess.Color) -> int:

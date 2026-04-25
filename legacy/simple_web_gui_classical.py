@@ -23,11 +23,11 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from classicalengine.board import EngineState
-from classicalengine.eval import ClassicalEvaluator
-from classicalengine.search import iterative_deepening
-from classicalengine.tt import TranspositionTable
-from classicalengine.types import SearchConfig
+from legacy.classicalengine.board import EngineState
+from legacy.classicalengine.eval import ClassicalEvaluator
+from legacy.classicalengine.search import iterative_deepening
+from legacy.classicalengine.tt import TranspositionTable
+from legacy.classicalengine.types import SearchConfig
 
 UNICODE_PIECE = {
     "P": "♙",

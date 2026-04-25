@@ -7,6 +7,6 @@
 # - Evaluation (eval.py) + tuning/* feature library
 # - Optional Syzygy probing (tablebase.py)
 #
-from antiengine.engine import UCIEngine
+from legacy.antiengine.engine import UCIEngine
 
 __all__ = ["UCIEngine"]

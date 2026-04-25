@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import chess
 
-from classicalengine.constants import MATE_VALUE, PIECE_VALUE
+from legacy.classicalengine.constants import MATE_VALUE, PIECE_VALUE
 
 
 def board_key(board: chess.Board) -> int:

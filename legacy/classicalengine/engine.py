@@ -3,12 +3,12 @@ from __future__ import annotations
 import threading
 from dataclasses import replace
 
-from classicalengine.board import EngineState
-from classicalengine.constants import ENGINE_AUTHOR, ENGINE_NAME, ENGINE_VERSION
-from classicalengine.eval import ClassicalEvaluator
-from classicalengine.search import iterative_deepening
-from classicalengine.tt import TranspositionTable
-from classicalengine.types import SearchConfig
+from legacy.classicalengine.board import EngineState
+from legacy.classicalengine.constants import ENGINE_AUTHOR, ENGINE_NAME, ENGINE_VERSION
+from legacy.classicalengine.eval import ClassicalEvaluator
+from legacy.classicalengine.search import iterative_deepening
+from legacy.classicalengine.tt import TranspositionTable
+from legacy.classicalengine.types import SearchConfig
 
 
 class UCIEngine:

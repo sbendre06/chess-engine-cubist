@@ -20,11 +20,11 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from antiengine.board import EngineState
-from antiengine.eval import AntichessEvaluator
-from antiengine.search import iterative_deepening
-from antiengine.tt import TranspositionTable
-from antiengine.types import SearchConfig
+from legacy.antiengine.board import EngineState
+from legacy.antiengine.eval import AntichessEvaluator
+from legacy.antiengine.search import iterative_deepening
+from legacy.antiengine.tt import TranspositionTable
+from legacy.antiengine.types import SearchConfig
 
 
 def _parse_args() -> argparse.Namespace:

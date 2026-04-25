@@ -6,8 +6,8 @@ from typing import Any, Callable
 
 import chess
 
-from classicalengine.constants import INFINITY, PIECE_VALUE
-from classicalengine.core import (
+from legacy.classicalengine.constants import INFINITY, PIECE_VALUE
+from legacy.classicalengine.core import (
     board_key,
     evaluate_board,
     get_legal_moves,
@@ -16,8 +16,8 @@ from classicalengine.core import (
     terminal_score,
     unmake_move,
 )
-from classicalengine.tt import EXACT, LOWER_BOUND, UPPER_BOUND
-from classicalengine.types import SearchConfig, SearchResult
+from legacy.classicalengine.tt import EXACT, LOWER_BOUND, UPPER_BOUND
+from legacy.classicalengine.types import SearchConfig, SearchResult
 
 
 def _move_priority(board: chess.Board, move: chess.Move, history: list[list[int]]) -> int:

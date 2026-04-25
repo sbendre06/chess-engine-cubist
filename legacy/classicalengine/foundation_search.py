@@ -6,9 +6,9 @@ from typing import Any, Callable
 
 import chess
 
-from classicalengine.constants import INFINITY
-from classicalengine.tt import EXACT, LOWER_BOUND, UPPER_BOUND
-from classicalengine.types import SearchConfig, SearchResult
+from legacy.classicalengine.constants import INFINITY
+from legacy.classicalengine.tt import EXACT, LOWER_BOUND, UPPER_BOUND
+from legacy.classicalengine.types import SearchConfig, SearchResult
 
 
 @dataclass(slots=True)

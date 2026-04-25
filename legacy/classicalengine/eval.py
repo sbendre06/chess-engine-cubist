@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import chess
 
-from classicalengine.constants import PIECE_VALUE, PST_BY_PIECE
+from legacy.classicalengine.constants import PIECE_VALUE, PST_BY_PIECE
 
 
 class ClassicalEvaluator:

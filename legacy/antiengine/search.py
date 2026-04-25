@@ -34,9 +34,9 @@ from typing import Any, Callable
 
 import chess
 
-from antiengine.constants import INFINITY, MATE_VALUE
-from antiengine.tt import EXACT, LOWER_BOUND, UPPER_BOUND
-from antiengine.types import SearchConfig, SearchResult
+from legacy.antiengine.constants import INFINITY, MATE_VALUE
+from legacy.antiengine.tt import EXACT, LOWER_BOUND, UPPER_BOUND
+from legacy.antiengine.types import SearchConfig, SearchResult
 
 
 def _terminal_score(board: chess.Board, ply: int) -> int:

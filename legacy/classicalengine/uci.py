@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 
-from classicalengine.engine import UCIEngine
+from legacy.classicalengine.engine import UCIEngine
 
 
 def main() -> None:
