@@ -1,6 +1,22 @@
 # Cubist Antichess Ablation
 
-This project is an ablation study of prompting strategies for AI-generated antichess engines. Each engine in `engines/` was written by a Claude session given a specific combination of three prompt ingredients — architectural guidance, antichess strategy knowledge, and opening-theory planning — while the search, UCI loop, and game rules were provided as a frozen harness the agent could not modify. The goal is to measure how much each ingredient contributes to playing strength, using win rate against a hand-written baseline engine as the primary metric and a three-tier correctness suite as a secondary diagnostic.
+In quantitative finance, alpha lives where intuition ends. Just as Point72 builds niche strategies that defy market consensus, we’ve researched how to force LLMs out of their "generic" training shells.
+
+By building an engine for **Antichess**—a variant where the goal is to lose and captures are mandatory—we created a stress test for AI. Standard LLMs are biased toward "winning" conventional chess; they struggle when the logic is inverted. This repository is an ablation study of prompting strategies used to override that bias.
+
+Each engine in `engines/` was written by a Claude session given a specific combination of three prompt ingredients — architectural guidance, antichess strategy knowledge, and opening-theory planning — while the search, UCI loop, and game rules were provided as a frozen harness the agent could not modify.
+
+---
+
+## The Research Framework
+
+Because we had limited credits to run our experiments, we divided our research framework into two parts: **Evaluation Framework** and **Parallel Subagents**.
+
+### 0. Deep Research & The Baseline
+Before running the ablation, we established a **Gold Standard Baseline**. This was not hand-written, but generated through a high-resource "Deep Research" workflow:
+* **Gemini Pro (Student Plan):** Used to perform deep research over existing engines and the Watkins strategy paper.
+* **Opus 4.6:** Used the summarized research context to brainstorm, plan, and implement the baseline via incremental commits and code-review critique agents.
+* **Standardization:** We used this process to build the **Engine Infrastructure**, creating a template branch with stubs (`evaluate_board`, `get_pseudo_legal_moves`, `order_moves`) so that parallel subagents could be tested cheaply and without information leakage.
 
 ---
 
@@ -113,13 +129,13 @@ Per-engine results land in `evaluation/results/correctness/<engine>.json`. After
 
 The three prompt axes are:
 
-- **arch** — whether the agent was given explicit architectural guidance (e.g., which python-chess APIs to prefer, how the harness filters moves).
-- **strat** — whether the agent was given antichess-specific strategy knowledge drawn from Watkins' proof (inverted material, forced-capture dynamics, capture-liability heuristics).
-- **plan** — whether the agent was given opening theory or a multi-step planning phase before writing code.
+- **arch** — explicit architectural guidance (APIs, harness constraints).
+- **strat** — antichess-specific strategy knowledge drawn from Watkins' paper (500-word condensed summary).
+- **plan** — Multi-step planning phase (Elite AI Researcher & Senior SE persona) vs. one-shotting.
 
 | Engine | arch | strat | plan | Win rate vs baseline | Notes |
 |--------|------|-------|------|---------------------|-------|
-| `baseline` | — | — | — | reference | Hand-written; not AI-generated |
+| `baseline` | — | — | — | reference | **Deep-Research iterative engine** |
 | `caveman` | no | no | no | 0.000 | Primitive naive implementation |
 | `noarch_nostrat_noplan` | no | no | no | 0.000 | Full ablation (no ingredients) |
 | `noarch_nostrat_yesplan` | no | no | yes | 0.500 | Planning alone breaks even |
@@ -140,7 +156,11 @@ Win rates are score against the baseline (0.5 = even; 1.0 = won every game).
 
 The most informative comparison is between `noarch_yesstrat_noplan` (0.750) and `yesarch_nostrat_noplan` (0.000): antichess domain knowledge (strategy) contributes far more to playing strength than structural coding guidance (architecture) when used in isolation. Architecture guidance without strategy does not improve over the full ablation. Planning alone (`noarch_nostrat_yesplan`, 0.500) is enough to match the baseline but not beat it. The full combination of all three ingredients achieves the ceiling.
 
-Correctness and win rate are weakly correlated. `yesarch_nostrat_noplan` (0.000 win rate) scores 12/14 on Tier 1 — it understands the rules but plays poorly. `noarch_yesstrat_noplan` (0.750 win rate) scores only 12/14 on Tier 1 but wins three quarters of its games. Rule compliance is necessary but not sufficient; the strategic heuristics in `evaluate_board` and `order_moves` drive the actual performance gap.
+---
+
+## Extensions
+
+With more resources such as Claude max, we could spawn more parallel subagents to enhance sample sizes to solidify significance in our findings and move toward an iterative "Natural Selection" improvement of the winning configurations.
 
 ---
 
@@ -149,8 +169,7 @@ Correctness and win rate are weakly correlated. `yesarch_nostrat_noplan` (0.000 
 ```
 engines/              One Python file per ablation condition plus baseline, template, and caveman.
                       Each file exports get_pseudo_legal_moves, evaluate_board, order_moves.
-                      Paired <name>.tokens.csv files record prompt cost (input/output tokens,
-                      wall time, notes).
+                      Paired <name>.tokens.csv files record prompt cost.
 
 harness/              Frozen code that agents may not modify.
   engine.py           Negamax alpha-beta with iterative deepening, time control, UCI shell.
@@ -159,31 +178,27 @@ harness/              Frozen code that agents may not modify.
   cli.py              Entry point wired from main.py.
 
 evaluation/           Tournament and correctness infrastructure.
-  adapter.py          Wraps a loaded engine module as a MoveEngine (name/choose_move/close).
-  match_loop.py       Core game loop used by both tournament.py and compare.py.
-  tournament.py       Runs every engine vs the baseline; writes CSV + updates experiment_log.csv.
+  adapter.py          Wraps a loaded engine module as a MoveEngine.
+  match_loop.py       Core game loop used by tournament.py.
+  tournament.py       Runs every engine vs the baseline; writes CSV.
   correctness.py      Three-tier correctness suite with CLI.
-  correctness_fixtures.py  Curated FEN positions and expected results for Tiers 0–2.
+  correctness_fixtures.py  Curated FEN positions and expected results.
   correctness_matrix.py    Renders a pass/fail table across all engines.
   correctness_plot.py      Writes a heatmap PNG.
-  openings.py         Generates balanced opening FENs by random walk + reference-engine filtering.
-  stochastic.py       Eval-noise wrapper to break determinism in tournament play.
-  report.py           Token-cost reader, Elo utilities, experiment_log updater.
-  results/            Tournament CSVs and per-engine correctness JSON (gitignored or committed
-                      depending on run).
+  openings.py         Generates balanced opening FENs.
+  stochastic.py       Eval-noise wrapper to break determinism.
+  report.py           Token-cost reader and ELO utilities.
+  results/            Tournament CSVs and per-engine correctness JSON.
 
 tools/
-  resumable_tournament.py   Tournament runner with per-game checkpointing and resume support.
-  simple_web_gui.py         Browser-based board to play manually against any engine.
+  resumable_tournament.py   Tournament runner with checkpointing.
+  simple_web_gui.py         Browser-based board to play manually.
   gui_vs_engine.py          Tkinter GUI variant.
 
 docs/
-  correctness_suite.md      Detailed fixture documentation for all 71 correctness tests.
-
-legacy/               Pre-harness prototype engines and their dedicated tools; not on the
-                      main ablation path.
+  correctness_suite.md      Detailed fixture documentation for all 71 tests.
 
 experiment_log.csv    One row per engine: token costs, win rates, correctness pass rates.
-main.py               UCI entry point: python main.py --engine <name> then pipe UCI commands.
-AGENTS.md             Instructions given to each Claude session that generated an engine.
+main.py               UCI entry point: python main.py --engine <name>.
+AGENTS.md             Instructions given to each Claude session.
 ```
