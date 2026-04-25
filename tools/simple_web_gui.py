@@ -34,10 +34,10 @@ ENGINE_LABELS: dict[str, str] = {
     "noarch_nostrat_noplan":      "Lost Luke",
     "noarch_nostrat_yesplan":     "Plan-mode Patty",
     "noarch_yesstrat_noplan":     "Idea-Guy Ian",
-    "yesarch_nostrat_noplan":     "Architecture only",
+    "yesarch_nostrat_noplan":     "Architectural Alina",
     "yesarch_yessttrat_noplan":   "Supervisor Sarah",
     "yesarch-nostrat-yesplan":    "Methodical Machine Mary",
-    "quant researcher":           "Quant Researcher Alpha",
+    "quant researcher":           "Quant Researcher Kevin",
     "arch1-strat1-plan1":         "Omnipotent Owen",
 }
 
@@ -46,24 +46,18 @@ def _engine_label(name: str) -> str:
     return ENGINE_LABELS.get(name, name)
 
 
+def _engines_json() -> str:
+    return json.dumps([{"name": k, "label": v} for k, v in ENGINE_LABELS.items()])
+
+
 UNICODE_PIECE = {
-    "P": "♙",
-    "N": "♘",
-    "B": "♗",
-    "R": "♖",
-    "Q": "♕",
-    "K": "♔",
-    "p": "♟",
-    "n": "♞",
-    "b": "♝",
-    "r": "♜",
-    "q": "♛",
-    "k": "♚",
+    "P": "♙", "N": "♘", "B": "♗", "R": "♖", "Q": "♕", "K": "♔",
+    "p": "♟", "n": "♞", "b": "♝", "r": "♜", "q": "♛", "k": "♚",
 }
 
 
-def _build_html(engine_name: str, engine_label: str) -> str:
-    return HTML.replace("__ENGINE_NAME__", engine_name).replace("__ENGINE_LABEL__", engine_label)
+def _build_html(active_engine: str) -> str:
+    return HTML.replace("__ENGINES_JSON__", _engines_json()).replace("__ACTIVE_ENGINE__", active_engine)
 
 
 HTML = """<!doctype html>
@@ -73,42 +67,91 @@ HTML = """<!doctype html>
   <title>Cubist AntiChess</title>
   <style>
     body { font-family: system-ui, sans-serif; margin: 20px; }
+    #layout { display: flex; gap: 28px; align-items: flex-start; }
     #board { display: grid; grid-template-columns: repeat(8, 56px); width: 448px; border: 1px solid #333; }
     .sq { width: 56px; height: 56px; border: none; font-size: 34px; cursor: pointer; }
     .light { background: #f0d9b5; }
     .dark { background: #b58863; }
     .selected { outline: 3px solid #f6e27f; }
     .target { outline: 3px solid #8bd17c; }
-    #status { margin: 12px 0; min-height: 24px; }
+    #status { margin: 12px 0; min-height: 24px; font-size: 14px; }
     #controls { margin-top: 12px; }
-    button { padding: 8px 12px; margin-right: 8px; }
+    .ctrl-btn { padding: 8px 12px; margin-right: 8px; }
     .small { color: #666; font-size: 13px; margin-top: 8px; }
-    #engine-info { margin-bottom: 10px; padding: 8px 12px; background: #f4f4f4; border-left: 3px solid #888; font-size: 13px; color: #333; max-width: 448px; }
-    #engine-info .label { font-weight: bold; color: #555; }
+    #engine-panel { min-width: 210px; }
+    #engine-panel h3 { margin: 0 0 10px 0; font-size: 15px; color: #333; border-bottom: 1px solid #ddd; padding-bottom: 6px; }
+    .engine-card {
+      display: block; width: 100%; text-align: left;
+      padding: 8px 12px; margin-bottom: 6px;
+      border: 2px solid #ddd; border-radius: 5px;
+      background: #fff; cursor: pointer; font-size: 13px;
+      transition: border-color 0.12s, background 0.12s;
+      box-sizing: border-box;
+    }
+    .engine-card:hover { border-color: #999; background: #f8f8f8; }
+    .engine-card.active { border-color: #4a90d9; background: #eaf3ff; font-weight: bold; color: #1a5fa8; }
+    .engine-card .eng-key { display: block; color: #aaa; font-size: 11px; margin-top: 2px; font-weight: normal; }
+    .engine-card.active .eng-key { color: #6aaae8; }
+    .switch-hint { font-size: 12px; color: #999; margin-top: 8px; }
   </style>
 </head>
 <body>
   <h2>Cubist AntiChess</h2>
-  <div id="engine-info">
-    <span class="label">Engine prompt structure:</span> __ENGINE_LABEL__
-    <span style="color:#999; margin-left:8px;">(__ENGINE_NAME__)</span>
+  <div id="layout">
+    <div>
+      <div id="status"></div>
+      <div id="board"></div>
+      <div id="controls">
+        <button class="ctrl-btn" id="newGameBtn">New Game</button>
+        <button class="ctrl-btn" id="refreshBtn">Refresh</button>
+      </div>
+      <div class="small">Click source square then destination square. Promotions prompt for piece (q/r/b/n/k).</div>
+    </div>
+    <div id="engine-panel">
+      <h3>Choose Engine</h3>
+      <div id="engine-list"></div>
+      <div class="switch-hint">Switching engine starts a new game.</div>
+    </div>
   </div>
-  <div id="status"></div>
-  <div id="board"></div>
-  <div id="controls">
-    <button id="newGameBtn">New Game</button>
-    <button id="refreshBtn">Refresh</button>
-  </div>
-  <div class="small">Click source square then destination square. Promotions prompt for piece (q/r/b/n/k).</div>
 
   <script>
+    const ENGINES = __ENGINES_JSON__;
+    let activeEngine = "__ACTIVE_ENGINE__";
+
     const boardEl = document.getElementById("board");
     const statusEl = document.getElementById("status");
     const newGameBtn = document.getElementById("newGameBtn");
     const refreshBtn = document.getElementById("refreshBtn");
+    const engineListEl = document.getElementById("engine-list");
 
     let current = null;
     let selected = null;
+
+    function renderEngineList() {
+      engineListEl.innerHTML = "";
+      for (const eng of ENGINES) {
+        const btn = document.createElement("button");
+        btn.className = "engine-card" + (eng.name === activeEngine ? " active" : "");
+        btn.innerHTML = eng.label + '<span class="eng-key">' + eng.name + "</span>";
+        btn.onclick = () => switchEngine(eng.name);
+        engineListEl.appendChild(btn);
+      }
+    }
+
+    async function switchEngine(name) {
+      if (name === activeEngine) return;
+      statusEl.textContent = "Switching engine...";
+      try {
+        const data = await api("/switch_engine", "POST", { name });
+        activeEngine = name;
+        current = data.state;
+        selected = null;
+        renderEngineList();
+        render();
+      } catch (err) {
+        statusEl.textContent = "Switch failed: " + err.message;
+      }
+    }
 
     function indexToSquare(idx) {
       const file = idx % 8;
@@ -214,6 +257,10 @@ HTML = """<!doctype html>
     async function loadState() {
       const data = await api("/state");
       current = data.state;
+      if (current.engine_name && current.engine_name !== activeEngine) {
+        activeEngine = current.engine_name;
+        renderEngineList();
+      }
       if (current.engine_turn && !current.game_over) {
         statusEl.textContent = "Engine thinking...";
         const moved = await api("/engine_move", "POST", {});
@@ -229,6 +276,7 @@ HTML = """<!doctype html>
     };
     refreshBtn.onclick = () => loadState();
 
+    renderEngineList();
     loadState();
   </script>
 </body>
@@ -244,6 +292,11 @@ class GameSession:
         self.engine_module = load_engine(engine_name)
         self.board = chess.variant.AntichessBoard()
         self.last_engine_info = ""
+
+    def switch_engine(self, name: str) -> None:
+        self.engine_module = load_engine(name)
+        self.engine_name = name
+        self.reset()
 
     def reset(self) -> None:
         self.board.reset()
@@ -296,6 +349,8 @@ class GameSession:
             "game_over": game_over,
             "engine_turn": (not self.is_human_turn()) and (not game_over),
             "status": self._status(),
+            "engine_name": self.engine_name,
+            "engine_label": _engine_label(self.engine_name),
         }
 
     def play_human_move(self, move_uci: str) -> None:
@@ -354,7 +409,7 @@ def make_handler(session: GameSession):
 
         def do_GET(self) -> None:  # noqa: N802
             if self.path == "/":
-                body = _build_html(session.engine_name, _engine_label(session.engine_name)).encode("utf-8")
+                body = _build_html(session.engine_name).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))
@@ -366,11 +421,33 @@ def make_handler(session: GameSession):
                 _json(self, 200, {"ok": True, "state": session.snapshot()})
                 return
 
+            if self.path == "/engines":
+                engines = [{"name": k, "label": v} for k, v in ENGINE_LABELS.items()]
+                _json(self, 200, {"ok": True, "engines": engines})
+                return
+
             _json(self, 404, {"ok": False, "error": "Not found"})
 
         def do_POST(self) -> None:  # noqa: N802
             if self.path == "/new_game":
                 session.reset()
+                _json(self, 200, {"ok": True, "state": session.snapshot()})
+                return
+
+            if self.path == "/switch_engine":
+                data = _read_json(self)
+                name = str(data.get("name", "")).strip()
+                if not name:
+                    _json(self, 400, {"ok": False, "error": "Missing engine name."})
+                    return
+                if name not in ENGINE_LABELS:
+                    _json(self, 400, {"ok": False, "error": f"Unknown engine: {name}"})
+                    return
+                try:
+                    session.switch_engine(name)
+                except EngineContractError as exc:
+                    _json(self, 400, {"ok": False, "error": str(exc)})
+                    return
                 _json(self, 200, {"ok": True, "state": session.snapshot()})
                 return
 
