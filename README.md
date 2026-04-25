@@ -7,6 +7,7 @@ By building an engine for **Antichess**—a variant where the goal is to lose an
 Each engine in `engines/` was written by a Claude session given a specific combination of three prompt ingredients — architectural guidance, antichess strategy knowledge, and opening-theory planning — while the search, UCI loop, and game rules were provided as a frozen harness the agent could not modify.
 
 Built for Cubist Hackathon 2026 and future experimentation.
+
 Sohan Bendre, Casper Liao, Austin Senna Wijaya, Kevin Wu, Aiden Zhou.
 
 ---
