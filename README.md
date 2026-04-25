@@ -1,2 +1,2 @@
 # Cubist Hackathon
-Create a chess engine - empahsize creative use of AI-powered softwares
+Create a chess engine - emphasize creative use of AI-powered softwares
