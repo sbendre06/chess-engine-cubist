@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Very simple browser GUI for playing antichess vs Cubist engine.
+Very simple browser GUI for playing antichess vs any engines/<name>.py.
 
 Run:
-  .venv/bin/python tools/simple_web_gui.py --you white --depth 3
+  .venv/bin/python tools/simple_web_gui.py --engine baseline --you white --depth 3
+  .venv/bin/python tools/simple_web_gui.py --engine yesarch_yessttrat_noplan --depth 3
 
 Then open:
   http://127.0.0.1:8000
@@ -18,16 +19,14 @@ import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import chess
+import chess.variant
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from antiengine.board import EngineState
-from antiengine.eval import AntichessEvaluator
-from antiengine.search import iterative_deepening
-from antiengine.tt import TranspositionTable
-from antiengine.types import SearchConfig
+from harness.engine import SearchConfig, iterative_deepening
+from harness.loader import EngineContractError, load_engine
 
 UNICODE_PIECE = {
     "P": "♙",
@@ -210,21 +209,20 @@ HTML = """<!doctype html>
 
 
 class GameSession:
-    def __init__(self, you_are_white: bool, config: SearchConfig, hash_mb: int) -> None:
+    def __init__(self, you_are_white: bool, config: SearchConfig, engine_name: str) -> None:
         self.you_are_white = you_are_white
         self.config = config
-        self.state = EngineState()
-        self.tt = TranspositionTable(megabytes=max(1, hash_mb))
-        self.evaluator = AntichessEvaluator()
+        self.engine_name = engine_name
+        self.engine_module = load_engine(engine_name)
+        self.board = chess.variant.AntichessBoard()
         self.last_engine_info = ""
 
     def reset(self) -> None:
-        self.state.reset_startpos()
-        self.tt.clear()
+        self.board.reset()
         self.last_engine_info = ""
 
     def is_human_turn(self) -> bool:
-        turn = self.state.board.turn
+        turn = self.board.turn
         return (turn == chess.WHITE and self.you_are_white) or (
             turn == chess.BLACK and not self.you_are_white
         )
@@ -232,7 +230,7 @@ class GameSession:
     def _board_payload(self) -> list[dict[str, str] | None]:
         out: list[dict[str, str] | None] = []
         for sq in range(64):
-            piece = self.state.board.piece_at(sq)
+            piece = self.board.piece_at(sq)
             if piece is None:
                 out.append(None)
                 continue
@@ -247,56 +245,55 @@ class GameSession:
         return out
 
     def _status(self) -> str:
-        if self.state.is_game_over():
-            outcome = self.state.outcome()
+        if self.board.is_game_over(claim_draw=True):
+            outcome = self.board.outcome(claim_draw=True)
             if outcome is None or outcome.winner is None:
                 return "Game over: draw."
             winner = "White" if outcome.winner == chess.WHITE else "Black"
             return f"Game over: {winner} wins (antichess rules)."
 
-        mover = "White" if self.state.board.turn == chess.WHITE else "Black"
-        actor = "You" if self.is_human_turn() else "Engine"
+        mover = "White" if self.board.turn == chess.WHITE else "Black"
+        actor = "You" if self.is_human_turn() else f"Engine: {self.engine_name}"
         suffix = f" | {self.last_engine_info}" if self.last_engine_info else ""
         return f"{mover} to move ({actor}).{suffix}"
 
     def snapshot(self) -> dict[str, object]:
-        board = self.state.board
+        board = self.board
+        game_over = board.is_game_over(claim_draw=True)
         return {
             "fen": board.fen(),
             "turn": "white" if board.turn == chess.WHITE else "black",
             "board": self._board_payload(),
             "legal_moves": [m.uci() for m in board.legal_moves],
-            "game_over": self.state.is_game_over(),
-            "engine_turn": (not self.is_human_turn()) and (not self.state.is_game_over()),
+            "game_over": game_over,
+            "engine_turn": (not self.is_human_turn()) and (not game_over),
             "status": self._status(),
         }
 
     def play_human_move(self, move_uci: str) -> None:
         if not self.is_human_turn():
             raise ValueError("It is not your turn.")
-        self.state.push_uci(move_uci)
+        move = chess.Move.from_uci(move_uci)
+        if move not in self.board.legal_moves:
+            raise ValueError(f"Illegal move: {move_uci}")
+        self.board.push(move)
 
     def play_engine_move(self) -> None:
-        if self.is_human_turn() or self.state.is_game_over():
+        if self.is_human_turn() or self.board.is_game_over(claim_draw=True):
             return
-        board_copy = self.state.copy_board()
-        result = iterative_deepening(
-            board_copy,
-            config=self.config,
-            tt=self.tt,
-            evaluator=self.evaluator,
-        )
+        board_copy = self.board.copy(stack=True)
+        result = iterative_deepening(board_copy, self.engine_module, self.config)
         move_uci = result.best_move_uci
+        legal = list(self.board.legal_moves)
+        if not legal:
+            return
         if move_uci is None:
-            legal = list(self.state.board.legal_moves)
-            if not legal:
-                return
             chosen = legal[0]
         else:
             chosen = chess.Move.from_uci(move_uci)
-            if chosen not in self.state.board.legal_moves:
-                chosen = list(self.state.board.legal_moves)[0]
-        self.state.push_move(chosen)
+            if chosen not in self.board.legal_moves:
+                chosen = legal[0]
+        self.board.push(chosen)
         self.last_engine_info = (
             f"engine {chosen.uci()} "
             f"(depth={result.depth_completed}, score={result.score_cp}, "
@@ -374,11 +371,12 @@ def make_handler(session: GameSession):
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Simple browser GUI for antichess vs engine.")
+    parser = argparse.ArgumentParser(description="Simple browser GUI for antichess vs any engines/<name>.py.")
+    parser.add_argument("--engine", default="baseline",
+                        help="Engine module name under engines/ (e.g. baseline, yesarch_yessttrat_noplan).")
     parser.add_argument("--you", choices=["white", "black"], default="white", help="Your side.")
     parser.add_argument("--depth", type=int, default=3, help="Engine fixed search depth.")
     parser.add_argument("--movetime", type=int, default=None, help="Engine move time in ms.")
-    parser.add_argument("--hash", type=int, default=64, help="TT size in MB.")
     parser.add_argument("--port", type=int, default=8000, help="HTTP port.")
     return parser.parse_args()
 
@@ -389,16 +387,21 @@ def main() -> None:
     if args.movetime is not None and args.movetime > 0:
         config.movetime_ms = args.movetime
 
-    session = GameSession(
-        you_are_white=(args.you == "white"),
-        config=config,
-        hash_mb=max(1, args.hash),
-    )
+    try:
+        session = GameSession(
+            you_are_white=(args.you == "white"),
+            config=config,
+            engine_name=args.engine,
+        )
+    except EngineContractError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        sys.exit(2)
+
     handler = make_handler(session)
 
     host = "127.0.0.1"
     server = ThreadingHTTPServer((host, args.port), handler)
-    print(f"Simple GUI ready at http://{host}:{args.port}", flush=True)
+    print(f"Simple GUI ready at http://{host}:{args.port}  (engine={args.engine})", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

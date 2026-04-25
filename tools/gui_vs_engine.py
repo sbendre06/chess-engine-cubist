@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Play antichess vs Cubist engine in a simple Tkinter GUI.
+Play antichess vs any engines/<name>.py in a simple Tkinter GUI.
 
 Examples:
-  .venv/bin/python tools/gui_vs_engine.py
-  .venv/bin/python tools/gui_vs_engine.py --you black --depth 4
-  .venv/bin/python tools/gui_vs_engine.py --movetime 500
+  .venv/bin/python tools/gui_vs_engine.py --engine baseline
+  .venv/bin/python tools/gui_vs_engine.py --engine yesarch_yessttrat_noplan --you black --depth 4
+  .venv/bin/python tools/gui_vs_engine.py --engine baseline --movetime 500
 """
 
 from __future__ import annotations
@@ -18,16 +18,14 @@ import tkinter as tk
 from tkinter import simpledialog
 
 import chess
+import chess.variant
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from antiengine.board import EngineState
-from antiengine.eval import AntichessEvaluator
-from antiengine.search import iterative_deepening
-from antiengine.tt import TranspositionTable
-from antiengine.types import SearchConfig
+from harness.engine import SearchConfig, iterative_deepening
+from harness.loader import EngineContractError, load_engine
 
 UNICODE_PIECE = {
     "P": "♙",
@@ -46,23 +44,29 @@ UNICODE_PIECE = {
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="GUI antichess vs Cubist engine.")
+    parser = argparse.ArgumentParser(description="GUI antichess vs any engines/<name>.py.")
+    parser.add_argument("--engine", default="baseline",
+                        help="Engine module name under engines/ (e.g. baseline, yesarch_yessttrat_noplan).")
     parser.add_argument("--you", choices=["white", "black"], default="white", help="Choose your side.")
     parser.add_argument("--depth", type=int, default=3, help="Fixed search depth.")
     parser.add_argument("--movetime", type=int, default=None, help="Engine time per move in ms.")
-    parser.add_argument("--hash", type=int, default=64, help="TT size in MB.")
     return parser.parse_args()
 
 
 class AntichessApp:
     def __init__(self, args: argparse.Namespace) -> None:
+        try:
+            self.engine_module = load_engine(args.engine)
+        except EngineContractError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            sys.exit(2)
+
+        self.engine_name = args.engine
         self.root = tk.Tk()
-        self.root.title("Cubist AntiChess")
+        self.root.title(f"Cubist AntiChess — {args.engine}")
 
         self.human_is_white = args.you == "white"
-        self.state = EngineState()
-        self.tt = TranspositionTable(megabytes=max(1, args.hash))
-        self.evaluator = AntichessEvaluator()
+        self.board = chess.variant.AntichessBoard()
 
         self.config = SearchConfig(max_depth=max(1, args.depth))
         if args.movetime is not None and args.movetime > 0:
@@ -108,19 +112,18 @@ class AntichessApp:
     def new_game(self) -> None:
         if self.is_engine_thinking:
             return
-        self.state.reset_startpos()
+        self.board.reset()
         self.selected_square = None
-        self.tt.clear()
         self.render()
         self.maybe_start_engine_turn()
 
     def on_square_click(self, square: int) -> None:
-        if self.is_engine_thinking or self.state.is_game_over():
+        if self.is_engine_thinking or self.board.is_game_over(claim_draw=True):
             return
         if not self._is_human_turn():
             return
 
-        board = self.state.board
+        board = self.board
         piece = board.piece_at(square)
         legal_moves = list(board.legal_moves)
 
@@ -144,7 +147,7 @@ class AntichessApp:
             self.render()
             return
 
-        self.state.push_move(chosen)
+        self.board.push(chosen)
         self.selected_square = None
         self.render()
         self.maybe_start_engine_turn()
@@ -180,11 +183,11 @@ class AntichessApp:
         return None
 
     def _is_human_turn(self) -> bool:
-        turn = self.state.board.turn
+        turn = self.board.turn
         return (turn == chess.WHITE and self.human_is_white) or (turn == chess.BLACK and not self.human_is_white)
 
     def maybe_start_engine_turn(self) -> None:
-        if self.state.is_game_over():
+        if self.board.is_game_over(claim_draw=True):
             self.render()
             return
         if self._is_human_turn():
@@ -195,22 +198,22 @@ class AntichessApp:
         self._set_board_enabled(False)
 
         def worker() -> None:
-            board_copy = self.state.copy_board()
-            result = iterative_deepening(board_copy, config=self.config, tt=self.tt, evaluator=self.evaluator)
+            board_copy = self.board.copy(stack=True)
+            result = iterative_deepening(board_copy, self.engine_module, self.config)
             move_uci = result.best_move_uci
             self.root.after(0, lambda: self._apply_engine_result(move_uci, result))
 
         threading.Thread(target=worker, daemon=True).start()
 
     def _apply_engine_result(self, move_uci: str | None, result) -> None:
-        legal = list(self.state.board.legal_moves)
+        legal = list(self.board.legal_moves)
         if legal:
             if move_uci is not None:
                 move = chess.Move.from_uci(move_uci)
-                chosen = move if move in self.state.board.legal_moves else legal[0]
+                chosen = move if move in self.board.legal_moves else legal[0]
             else:
                 chosen = legal[0]
-            self.state.push_move(chosen)
+            self.board.push(chosen)
 
         self.is_engine_thinking = False
         self._set_board_enabled(True)
@@ -226,7 +229,7 @@ class AntichessApp:
             btn.configure(state=state)
 
     def render(self) -> None:
-        board = self.state.board
+        board = self.board
 
         for square, btn in self.square_buttons.items():
             piece = board.piece_at(square)
@@ -251,8 +254,8 @@ class AntichessApp:
 
             btn.configure(text=text, bg=bg, activebackground=bg)
 
-        if self.state.is_game_over():
-            outcome = self.state.outcome()
+        if self.board.is_game_over(claim_draw=True):
+            outcome = self.board.outcome(claim_draw=True)
             if outcome is None or outcome.winner is None:
                 self.status_var.set("Game over: draw")
             else:
