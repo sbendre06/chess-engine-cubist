@@ -27,14 +27,6 @@ ENGINE_NAME = "Cubist Frozen Harness"
 ENGINE_AUTHOR = "Cubist Ablation Team"
 MATE_SCORE = 1_000_000
 INFINITY = 10_000_000
-PIECE_VALUES = {
-    chess.PAWN: 100,
-    chess.KNIGHT: 320,
-    chess.BISHOP: 330,
-    chess.ROOK: 500,
-    chess.QUEEN: 900,
-    chess.KING: 400,
-}
 
 
 @dataclass(slots=True)
