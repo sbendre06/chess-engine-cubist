@@ -32,7 +32,22 @@ _BURDEN: dict[int, int] = {
 def get_pseudo_legal_moves(
     board: chess.variant.AntichessBoard,
 ) -> list[chess.Move]:
-    """Return all pseudo-legal moves. Harness will filter to legal."""
+    """Return all pseudo-legal moves for the current position.
+
+    Args:
+        board: chess.variant.AntichessBoard — current position.
+
+    Returns:
+        list[chess.Move] — all moves from board.pseudo_legal_moves, which may
+        include quiet moves even when a capture is available.  The harness
+        filters through board.legal_moves before playing, discarding quiet moves
+        whenever a capture exists.
+
+    Antichess:
+        Returns pseudo-legals so the harness's legal-move filter handles the
+        forced-capture rule.  The search sees a superset of legal candidates;
+        the harness silently prunes non-captures when a capture is mandatory.
+    """
     return list(board.pseudo_legal_moves)
 
 
@@ -43,11 +58,28 @@ def evaluate_board(
 
     Higher = better for the side to move (i.e., closer to winning).
 
+    Args:
+        board: chess.variant.AntichessBoard — current position; board.turn
+            identifies which side is evaluated.
+
+    Returns:
+        int — side-to-move-positive score.  If the game is over, returns
+        ±1_000_000.  Otherwise composed of: -3 * own_burden + opp_burden
+        (inverted material), -15 * own_count + 5 * opp_count (piece-count
+        terms), +2 * mobility (legal-move count), pawn advancement bonus,
+        and a stalemate proximity bonus (when own_count ≤ 3 and mobility < 5).
+
     Key axes:
     1. Own material burden: fewer/lighter pieces = better (want to lose them)
     2. Opponent material burden: more/heavier = neutral-to-good (they still need to lose theirs)
     3. Mobility: more legal moves for us = better (control over what gets captured)
     4. Stalemate proximity: if we have very few pieces and limited moves, that's great
+
+    Antichess:
+        Terminal positions are handled here by returning ±1_000_000, not
+        delegated to the harness; this covers the timeout path where evaluate_board
+        is called mid-search.  The stalemate proximity bonus is specific to
+        antichess: zero legal moves is a win for the stalemated side.
     """
     if board.is_game_over(claim_draw=True):
         outcome = board.outcome(claim_draw=True)
@@ -115,7 +147,18 @@ def order_moves(
     board: chess.variant.AntichessBoard,
     moves: list[chess.Move],
 ) -> list[chess.Move]:
-    """Order moves to improve alpha-beta cutoffs.
+    """Reorder moves to improve alpha-beta cutoffs.
+
+    Args:
+        board: chess.variant.AntichessBoard — current position; used to
+            classify moves, look up piece burdens, and detect attacked squares.
+        moves: list[chess.Move] — filtered legal moves to reorder.
+
+    Returns:
+        list[chess.Move] — same moves sorted by descending move_score.
+        Captures score 2000+ (base) plus own-piece burden × 10 minus
+        opponent-piece burden × 5.  Non-capture pawn advances and moves to
+        opponent-attacked squares receive smaller bonuses.
 
     Priority (highest first):
     1. Captures that sacrifice our highest-burden pieces
@@ -125,6 +168,12 @@ def order_moves(
     3. Non-capture pawn advances toward promotion
     4. Other non-captures that expose pieces (moves to attacked squares)
     5. Everything else
+
+    Antichess:
+        Capture scoring is own-attacker-burden minus opponent-victim-burden:
+        we want to sacrifice our heaviest pieces (high burden) while capturing
+        the opponent's lightest pieces so they retain their heavy pieces as
+        their own problem to shed.
     """
     us = board.turn
 

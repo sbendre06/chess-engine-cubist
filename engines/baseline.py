@@ -23,7 +23,23 @@ PIECE_VALUES = {
 
 
 def get_pseudo_legal_moves(board: chess.variant.AntichessBoard) -> list[chess.Move]:
-    """Return candidate moves, enforcing antichess's forced-capture rule."""
+    """Return candidate moves, enforcing antichess's forced-capture rule.
+
+    Args:
+        board: chess.variant.AntichessBoard — current position including turn,
+            piece placement, and en-passant state.
+
+    Returns:
+        list[chess.Move] — if any pseudo-legal capture exists, only captures
+        are returned; otherwise all pseudo-legal moves are returned.
+
+    Antichess:
+        Implements the forced-capture rule manually by scanning
+        board.pseudo_legal_moves for captures and excluding quiet moves when
+        any capture is found.  The harness re-filters through board.legal_moves
+        before playing any move, but this function must express the rule so the
+        search only considers captures when they exist.
+    """
     moves = list(board.pseudo_legal_moves)
     captures = [move for move in moves if board.is_capture(move)]
     return captures if captures else moves
@@ -36,6 +52,23 @@ def evaluate_board(board: chess.variant.AntichessBoard) -> int:
       - Fewer own pieces is better (closer to the win condition).
       - Fewer own moves is better (harder to be forced).
       - Capture availability for opponent is good (they must take).
+
+    Args:
+        board: chess.variant.AntichessBoard — current position; board.turn
+            identifies which side is being evaluated.
+
+    Returns:
+        int — side-to-move-positive score.  Components: +150 per piece
+        advantage (opp_pieces - own_pieces), +material delta/10, -4 per own
+        legal move, +4 per opponent legal move, -12 per own capture available,
+        +12 per opponent capture available.  Terminal positions are scored by
+        the harness with MATE_SCORE; not handled here.
+
+    Antichess:
+        Every classical heuristic is inverted: own material is a liability,
+        own mobility is bad, opponent mobility is good, own captures available
+        are bad (we'd rather not have forced choices), opponent captures are
+        good (they must take).
     """
     side = board.turn
     opp = not side
@@ -86,7 +119,25 @@ def order_moves(
     board: chess.variant.AntichessBoard,
     moves: list[chess.Move],
 ) -> list[chess.Move]:
-    """Captures first (biggest victim first), then promotions, then quiets."""
+    """Reorder moves with captures first (biggest victim first), then promotions, then quiets.
+
+    Args:
+        board: chess.variant.AntichessBoard — current position; used to
+            classify moves and look up captured-piece values.
+        moves: list[chess.Move] — filtered legal moves to reorder.
+
+    Returns:
+        list[chess.Move] — same moves sorted by descending priority tuple:
+        (is_capture, is_promotion, captured_piece_value, promotion_piece_value).
+        Captures of the highest-value victim appear first; among ties,
+        promotions to higher-value pieces are preferred.
+
+    Antichess:
+        Sorting by victim value (classical MVV) is used as a simple heuristic
+        even though in antichess we want the opponent to keep their heavy pieces.
+        This baseline deliberately keeps ordering straightforward; more
+        antichess-aware orderings appear in the ablation-branch engines.
+    """
     return sorted(
         moves,
         key=lambda move: (

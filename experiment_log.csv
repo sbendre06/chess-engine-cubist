@@ -1,0 +1,10 @@
+experiment_name,tokens_in,tokens_out,wall_time_minutes,interventions,engine_winrate,tier0_pass_rate,tier1_pass_rate,tier2_pass_rate
+arch1-strat1-plan1,,,,,0.9000,1.0000,0.9286,0.7143
+caveman,,,,,0.5500,1.0000,0.8571,0.5714
+noarch_nostrat_noplan,,,,,0.4750,1.0000,0.7857,0.5714
+noarch_nostrat_yesplan,,,,,0.5750,1.0000,0.9286,0.4286
+noarch_yesstrat_noplan,,,,,0.5250,1.0000,0.8571,0.7143
+yesarch-nostrat-yesplan,,,,,0.2250,1.0000,0.9286,0.5714
+yesarch_nostrat_noplan,,,,,0.6000,1.0000,0.8571,0.4286
+yesarch_yesstrat_yesplan_p1,,,,,0.4500,1.0000,0.9286,0.7143
+yesarch_yessttrat_noplan,,,,,0.3750,1.0000,1.0000,0.4286

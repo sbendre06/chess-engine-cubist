@@ -20,12 +20,48 @@ PIECE_BURDEN = {
 def get_pseudo_legal_moves(
     board: chess.variant.AntichessBoard,
 ) -> list[chess.Move]:
+    """Return all pseudo-legal moves for the current position.
+
+    Args:
+        board: chess.variant.AntichessBoard — current position.
+
+    Returns:
+        list[chess.Move] — all moves from board.pseudo_legal_moves, which may
+        include quiet moves even when a capture is available.  The harness
+        filters this list through board.legal_moves before playing any move,
+        discarding quiet moves whenever a capture exists.
+
+    Antichess:
+        The forced-capture rule is not enforced here; the harness's legal-move
+        filter handles it.  Returning pseudo-legals rather than legals means the
+        search sees a superset of legal candidates; none are missed.
+    """
     return list(board.pseudo_legal_moves)
 
 
 def evaluate_board(
     board: chess.variant.AntichessBoard,
 ) -> int:
+    """Score the position from the side-to-move perspective using inverted piece burden.
+
+    Args:
+        board: chess.variant.AntichessBoard — current position; board.turn
+            identifies which side is being evaluated.
+
+    Returns:
+        int — side-to-move-positive score.  Components: -3 * own_burden
+        (inverted material, fewer/cheaper own pieces is better), +opp_burden,
+        +2 * attacked_bonus (own pieces under opponent attack will soon be
+        captured, reducing our piece count), -10 * own_moves (fewer legal
+        moves approaches stalemate, a win in antichess).
+
+    Antichess:
+        PIECE_BURDEN reflects how hard each piece type is to sacrifice, not
+        classical piece strength.  Stalemate (zero legal moves) is a win for
+        the stalemated side, so low own mobility is scored positively.
+        Terminal positions are not handled here; the harness scores those
+        with MATE_SCORE via _terminal_score.
+    """
     side = board.turn
     opp = not side
 
@@ -58,6 +94,27 @@ def order_moves(
     board: chess.variant.AntichessBoard,
     moves: list[chess.Move],
 ) -> list[chess.Move]:
+    """Reorder moves to place more promising lines first for alpha-beta pruning.
+
+    Args:
+        board: chess.variant.AntichessBoard — current position; used to
+            classify moves, look up piece burdens, and detect attacked squares.
+        moves: list[chess.Move] — filtered legal moves to reorder.
+
+    Returns:
+        list[chess.Move] — same moves sorted by descending priority score.
+        Captures score +2000 base, with higher scores for capturing low-burden
+        opponent pieces (keeping their heavy pieces as their problem).
+        Promotions to low-burden pieces score highly.  Quiet moves to opponent-
+        attacked squares score last.
+
+    Antichess:
+        Unlike classical chess, low-burden opponent captures are preferred:
+        capturing a pawn (burden 500) scores lower than capturing a queen
+        (burden 100) because we want the opponent to keep their heavy pieces.
+        Moving to attacked squares on quiet moves is rewarded because the piece
+        will likely be captured next ply, advancing the win condition.
+    """
     opp = not board.turn
 
     def priority(move: chess.Move) -> int:

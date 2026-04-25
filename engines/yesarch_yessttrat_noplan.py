@@ -40,9 +40,20 @@ def get_pseudo_legal_moves(
 ) -> list[chess.Move]:
     """Return all legal moves for the current position.
 
-    python-chess's AntichessBoard already enforces the mandatory-capture rule
-    inside legal_moves, so returning those directly is both correct and safe.
-    The harness re-filters through legal_moves anyway.
+    Args:
+        board: chess.variant.AntichessBoard — current position.
+
+    Returns:
+        list[chess.Move] — all moves from board.legal_moves, which already
+        enforces the forced-capture rule: only captures are returned when any
+        capture is available.
+
+    Antichess:
+        Delegates to board.legal_moves so the forced-capture rule is handled
+        by python-chess internally.  The harness re-filters through
+        board.legal_moves regardless, so this is both correct and safe.
+        AntichessBoard.legal_moves also handles promotion-to-king, no-castling,
+        and king-capturable rules that differ from standard chess.
     """
     return list(board.legal_moves)
 
@@ -50,23 +61,29 @@ def get_pseudo_legal_moves(
 def evaluate_board(
     board: chess.variant.AntichessBoard,
 ) -> int:
-    """Static evaluation from the side-to-move perspective.
+    """Score the position from the side-to-move perspective.
 
-    Higher score  →  better for the side to move.
+    Higher score → better for the side to move.
 
-    Components
-    ----------
-    1. Material burden delta  (opp_burden − my_burden)
-       Fewer / lighter pieces for *me* is better.
+    Args:
+        board: chess.variant.AntichessBoard — current position; board.turn
+            identifies which side is evaluated (me/opp).
 
-    2. Capture-liability bonus
-       For each of my pieces currently attacked by the opponent, add a bonus
-       proportional to that piece's burden.  If a capture is available the
-       opponent is *forced* to take, so attacked pieces will soon disappear —
-       this is good for us.
+    Returns:
+        int — side-to-move-positive score.  Components:
+        (1) opp_burden - my_burden: material burden delta where each piece
+            type is weighted by how hard it is to sacrifice (PIECE_BURDEN),
+            not classical piece strength;
+        (2) PIECE_BURDEN[pt] // 3 per own piece currently attacked by the
+            opponent: capture-liability bonus for pieces that will soon be taken.
+        Terminal positions are scored by the harness with MATE_SCORE.
 
-    Terminal positions (zero pieces, stalemate) are scored by the harness
-    with MATE_SCORE and are not handled here.
+    Antichess:
+        PIECE_BURDEN weights reflect sacrifice difficulty: bishops (450) and
+        rooks (400) are worst because they can be trapped in forced capture
+        chains; queens (300) are better because their multipath mobility lets
+        them escape chains.  If a capture is available the opponent is forced
+        to take, so own attacked pieces will soon be removed — this is good.
     """
     me  = board.turn
     opp = not me
@@ -97,6 +114,19 @@ def order_moves(
 ) -> list[chess.Move]:
     """Reorder moves to improve alpha-beta cut-offs.
 
+    Args:
+        board: chess.variant.AntichessBoard — current position; used to
+            classify moves, look up piece burdens, and probe recapturability
+            via board.push/pop.
+        moves: list[chess.Move] — filtered legal moves to reorder.
+
+    Returns:
+        list[chess.Move] — captures sorted by capture_key, followed by non-
+        captures sorted by non_capture_key.  Captures always precede non-captures.
+        Within captures, chain sacrifices (immediately recapturable after the
+        move) score +2000 on top of own-piece burden; within non-captures,
+        moves to pre-attacked squares score +1500 on top of own-piece burden.
+
     Antichess ordering heuristics
     ------------------------------
     Captures (always explored first):
@@ -108,6 +138,13 @@ def order_moves(
       - Prefer moves that place our piece on a square attacked by the opponent
         (it will likely be taken on the next ply).
       - Among those, prefer moving heavier pieces into danger.
+
+    Antichess:
+        Capture ordering uses own-attacker burden, not victim value: the goal
+        is to shed our hardest-to-lose pieces.  The recapture check (board.push
+        + is_attacked_by + board.pop) is done per-capture and is the most
+        expensive part of the ordering; it is justified because chain sacrifices
+        are the highest-leverage moves in antichess.
     """
     opp = not board.turn
 

@@ -27,6 +27,7 @@ class MatchConfig:
     depth: int = 3
     movetime_ms: int | None = None
     max_plies: int = 600
+    openings: list[str] | None = None
 
 
 @dataclass(slots=True)
@@ -44,6 +45,7 @@ class MatchReport:
     def score_a(self) -> float:
         if self.games <= 0:
             return 0.0
+        # Standard match score: win=1, draw=0.5, loss=0.
         return (self.engine_a_wins + 0.5 * self.draws) / self.games
 
 
@@ -59,28 +61,45 @@ def run_match(
     plies_record: list[int] = []
     secs_record: list[float] = []
 
+    openings = config.openings or []
     try:
         for idx in range(1, config.games + 1):
+            # Pair games (1,2), (3,4), ... so each opening is played twice
+            # with colors swapped — bias from the position cancels out.
             board = chess.variant.AntichessBoard()
+            if openings:
+                # Integer division maps games 1,2→opening 0; 3,4→opening 1; etc.
+                # Modulo wraps if games > 2*len(openings).
+                board.set_fen(openings[((idx - 1) // 2) % len(openings)])
+            # Odd game: A=white, B=black.  Even game: B=white, A=black.
             white = adapter_a if idx % 2 == 1 else adapter_b
             black = adapter_b if idx % 2 == 1 else adapter_a
 
             start = time.perf_counter()
             plies = 0
+            # claim_draw=True enables 50-move and threefold-repetition draws,
+            # which are rare but possible even in antichess.
             while not board.is_game_over(claim_draw=True) and plies < config.max_plies:
                 mover = white if board.turn == chess.WHITE else black
                 move = mover.choose_move(board)
+                # Defensive check: the harness filters moves, but adapters could
+                # still return an illegal move if get_pseudo_legal_moves is empty
+                # and the fallback path fires (see adapter.py).
                 if move not in board.legal_moves:
                     raise ValueError(f"Illegal move from {mover.name}: {move.uci()}")
                 board.push(move)
                 plies += 1
 
             elapsed = time.perf_counter() - start
+            # claim_draw=True required here to match the is_game_over call above;
+            # outcome() without it may disagree on draw positions.
             outcome = board.outcome(claim_draw=True)
             winner_name = None
             if outcome is not None and outcome.winner is not None:
                 winner_name = white.name if outcome.winner == chess.WHITE else black.name
 
+            # winner_name stays None for: draws (50-move/repetition), and games
+            # that hit max_plies without a decisive result — both count as draws.
             if winner_name is None:
                 draws += 1
             elif winner_name == adapter_a.name:
@@ -97,6 +116,8 @@ def run_match(
                     flush=True,
                 )
     finally:
+        # Always close adapters even if a game raises; prevents resource leaks
+        # from any adapter that holds a subprocess or file handle.
         adapter_a.close()
         adapter_b.close()
 

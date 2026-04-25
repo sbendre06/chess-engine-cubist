@@ -19,6 +19,21 @@ PIECE_VALUES: dict[int, int] = {
 def get_pseudo_legal_moves(
     board: chess.variant.AntichessBoard,
 ) -> list[chess.Move]:
+    """Return all legal moves for the current position.
+
+    Args:
+        board: chess.variant.AntichessBoard — current position.
+
+    Returns:
+        list[chess.Move] — all moves from board.legal_moves, which already
+        enforces the forced-capture rule: only captures are returned when any
+        capture is available.
+
+    Antichess:
+        Delegates to board.legal_moves so the forced-capture rule is handled
+        by python-chess internally.  The harness re-filters through
+        board.legal_moves regardless, so this is correct and safe.
+    """
     # AntichessBoard.legal_moves already enforces mandatory captures:
     # returns captures-only when any capture is available.
     return list(board.legal_moves)
@@ -27,10 +42,27 @@ def get_pseudo_legal_moves(
 def evaluate_board(
     board: chess.variant.AntichessBoard,
 ) -> int:
-    """Score the position for the side to move. Higher = better.
+    """Score the position for the side to move; higher is better for the side to move.
 
-    Antichess inversion: own material is a liability, opponent attacks on our
-    pieces are welcome (they'll be forced to capture us).
+    Args:
+        board: chess.variant.AntichessBoard — current position; board.turn
+            identifies which side is being evaluated.
+
+    Returns:
+        int — side-to-move-positive score.  Components (all via bitboard ops):
+        -own_material (inverted material, fewer/cheaper own pieces is better),
+        +65 per own piece under opponent attack (capture liability bonus),
+        +15 per opponent piece we currently threaten (capture pressure bonus),
+        -20 per own piece (raw piece-count penalty), +8 * rank advancement per
+        own pawn.  Terminal positions are scored by the harness with MATE_SCORE.
+
+    Antichess:
+        All material signs are inverted: own pieces are liabilities.  Capture
+        liability (own pieces en prise) is the primary positional tension in
+        antichess: an attacked own piece will likely be taken next ply,
+        reducing our piece count toward the win condition of zero pieces.
+        Pawn advancement is rewarded because advanced pawns can promote and
+        are the key endgame tool per Watkins' proof.
     """
     side = board.turn
     them = not side
@@ -78,12 +110,27 @@ def order_moves(
     board: chess.variant.AntichessBoard,
     moves: list[chess.Move],
 ) -> list[chess.Move]:
-    """Order moves: chain-reaction captures first, then MVA, then promotions.
+    """Reorder moves: chain-reaction captures first, then MVA captures, then promotions.
 
-    Chain reaction bonus (1500): our piece lands on an opponent-attacked square,
-    so they must immediately recapture us — two pieces leave the board for one move.
-    MVA (Most Valuable Attacker × 2): use our queen/rook first to get them off board.
-    Promotion bonus (400 + piece value): promotions create new forced-capture targets.
+    Args:
+        board: chess.variant.AntichessBoard — current position; used to
+            classify moves, look up piece values, and compute the opponent's
+            pre-move attack mask.
+        moves: list[chess.Move] — filtered legal moves to reorder.
+
+    Returns:
+        list[chess.Move] — same moves sorted by descending score_move value.
+        Chain-reaction captures (our piece lands on an opponent-attacked square,
+        triggering an immediate forced recapture) score +1500 bonus on top of
+        the MVA score.  Promotions add 400 + PIECE_VALUES[promotion piece].
+
+    Antichess:
+        MVA ordering (Most Valuable Attacker, not victim) means we prefer to
+        sacrifice our queen/rook first — shedding high-value pieces is the goal.
+        The chain-reaction bonus is the highest-priority signal: if the opponent
+        must immediately recapture after our move, two pieces leave the board
+        in one move-pair, accelerating our progress toward zero pieces.
+        The opponent attack mask is precomputed once per call for efficiency.
     """
     them = not board.turn
 
