@@ -255,12 +255,14 @@ master.head()
     ),
     code(
         '''
-fig, ax = plt.subplots(figsize=(13, 6.5))
+fig, ax = plt.subplots(figsize=(13, 9))
 
 outcome_metrics = [
-    ("elo_d4_random",   "Elo (d=4 random)"),
-    ("code_quality",    "Code Quality"),
-    ("tier2_pass_rate", "Tier 2 (strategic)"),
+    ("elo_d3_zerostart", "Elo (d=3 · start)"),
+    ("elo_d4_random",    "Elo (d=4 · random)"),
+    ("code_quality",     "Code Quality"),
+    ("tier1_pass_rate",  "Tier 1 (edge case)"),
+    ("tier2_pass_rate",  "Tier 2 (strategic)"),
 ]
 
 rows = []
@@ -296,7 +298,79 @@ plt.show()
     ),
     md(
         """
-## 3 · Contextual Friction
+## 3 · Persona is a second-order knob
+> Among the three "all-on" runs (arch + strat + plan), we tested two personas:
+> **p1 = C++ quant developer** and **p2 = caveman**. Below: how each persona
+> moves the same outcome metrics *relative to the no-persona default* (run
+> 1110, `arch1-strat1-plan1`).
+"""
+    ),
+    code(
+        '''
+fig, ax = plt.subplots(figsize=(13, 9))
+
+# Three "all-on" runs only.
+default_eng = master[master["run_id"] == "1110"].iloc[0]   # no persona
+quant_eng   = master[master["run_id"] == "1111"].iloc[0]   # C++ quant dev
+caveman_eng = master[master["run_id"] == "1112"].iloc[0]   # caveman
+
+persona_metrics = [
+    ("elo_d3_zerostart", "Elo (d=3 · start)"),
+    ("elo_d4_random",    "Elo (d=4 · random)"),
+    ("code_quality",     "Code Quality"),
+    ("tier1_pass_rate",  "Tier 1 (edge case)"),
+    ("tier2_pass_rate",  "Tier 2 (strategic)"),
+]
+
+rows = []
+for col, label in persona_metrics:
+    base = default_eng[col]
+    rows.append({"metric": label, "persona": "C++ quant dev (p1)", "delta": quant_eng[col]   - base})
+    rows.append({"metric": label, "persona": "Caveman (p2)",       "delta": caveman_eng[col] - base})
+delta_df = pd.DataFrame(rows)
+# Drop rows where delta is NaN (e.g., d=3 zerostart Elo is missing for engines
+# that swept or got swept and have no comparable Elo to subtract).
+delta_df = delta_df.dropna(subset=["delta"]).reset_index(drop=True)
+delta_df["delta_norm"] = delta_df.groupby("metric")["delta"].transform(
+    lambda s: s / s.abs().max() if s.abs().max() > 0 else s
+)
+
+palette = {"C++ quant dev (p1)": "#5b8def", "Caveman (p2)": "#f29e4c"}
+# Drop metrics where both personas are NaN (e.g., d=3 zerostart Elo: both
+# personas swept or got swept, so no Elo was reported).
+metric_order = [m[1] for m in persona_metrics if m[1] in delta_df["metric"].unique()]
+persona_order = ["C++ quant dev (p1)", "Caveman (p2)"]
+
+sns.barplot(
+    data=delta_df, y="metric", x="delta_norm", hue="persona",
+    order=metric_order, hue_order=persona_order,
+    palette=palette, ax=ax,
+)
+ax.axvline(0, color="#333", lw=1)
+
+# Annotate raw delta on each bar — compute positions from data, not patches.
+hue_offsets = {persona_order[0]: -0.2, persona_order[1]: +0.2}
+for _, row in delta_df.iterrows():
+    raw = row["delta"]
+    raw_str = f"{raw:+.0f}" if abs(raw) >= 1 else f"{raw:+.2f}"
+    y = metric_order.index(row["metric"]) + hue_offsets[row["persona"]]
+    x = row["delta_norm"]
+    ax.text(x + (0.04 if x >= 0 else -0.04), y, raw_str,
+            va="center", ha="left" if x >= 0 else "right",
+            fontsize=12, fontweight="bold", color="#333")
+
+ax.set_title("Persona shifts outcomes — both directions, mostly downward")
+ax.set_xlabel("Effect of persona vs. no-persona default  (normalized per metric)")
+ax.set_ylabel("")
+ax.set_xlim(-1.3, 1.3)
+ax.legend(title="Persona", loc="lower right")
+plt.tight_layout()
+plt.show()
+'''
+    ),
+    md(
+        """
+## 4 · Contextual Friction
 > **Insight:** With Planning enabled, more information acts as a catalyst.
 > Without Planning, more information becomes drag — *contextual friction*.
 """
@@ -340,7 +414,7 @@ plt.show()
     ),
     md(
         """
-## 4 · The Token Hedge
+## 5 · The Token Hedge
 > **Insight:** Planning has a fixed, predictable token cost regardless of complexity.
 > Without it, tokens explode through *correction cycles*.
 """
@@ -368,41 +442,6 @@ ax.set_xlabel("Context level")
 ax.set_ylabel("Total tokens used")
 ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"{int(v/1000)}k"))
 ax.legend(title="Plan", labels=["off", "on"], loc="upper left")
-plt.tight_layout()
-plt.show()
-'''
-    ),
-    md(
-        """
-## 5 · Cost per run
-> Reported `$` shown solid; estimated (Sonnet 4.6 pricing) shown hatched.
-> Cache-write tokens aren't in the source table → estimates are a lower bound.
-"""
-    ),
-    code(
-        '''
-fig, ax = plt.subplots(figsize=(12, 6.5))
-cost_df = build.sort_values("cost_usd").copy()
-cost_df["label"] = cost_df["run_id"] + " · " + cost_df["engine_name"].fillna("(unmapped)")
-colors  = ["#d96459" if pd.isna(r) else "#1f9aa0" for r in cost_df["cost_usd_reported"]]
-hatches = ["///"     if pd.isna(r) else ""        for r in cost_df["cost_usd_reported"]]
-
-bars = ax.barh(cost_df["label"], cost_df["cost_usd"], color=colors)
-for bar, h in zip(bars, hatches):
-    bar.set_hatch(h)
-for bar, v in zip(bars, cost_df["cost_usd"]):
-    ax.text(v + 0.02, bar.get_y() + bar.get_height()/2, f"${v:.2f}",
-            va="center", fontsize=13)
-
-ax.set_title("Cost per engine-generation run")
-ax.set_xlabel("USD")
-ax.set_ylabel("")
-ax.set_xlim(0, cost_df["cost_usd"].max() * 1.18)
-from matplotlib.patches import Patch
-ax.legend(handles=[
-    Patch(facecolor="#1f9aa0", label="reported"),
-    Patch(facecolor="#d96459", hatch="///", label="estimated"),
-], loc="lower right")
 plt.tight_layout()
 plt.show()
 '''
@@ -508,7 +547,7 @@ plt.show()
     ),
     md(
         """
-## 8 · Pathological Cases — split by Strategy
+## 8 · Edge-Case Correctness & Strategic Decisions — split by Strategy
 > Hand-authored fixtures probe whether the engine has *internalized* rules
 > (Tier 1) and whether it makes *strategic* decisions consistent with
 > Watkins-derived endgame theory (Tier 2).
@@ -538,7 +577,7 @@ for i, v in enumerate(corr["tier1_pass_rate"]):
     axes[0].text(v + 0.01, i, f"{v:.0%}", va="center",
                  fontsize=14, fontweight="bold")
 axes[0].set_xlim(0, 1.15)
-axes[0].set_title("Tier 1 — Rule Compliance")
+axes[0].set_title("Tier 1 — Edge Case Correctness")
 axes[0].set_xlabel("Pass rate")
 
 axes[1].barh(corr["engine_name"], corr["tier2_pass_rate"], color=bar_colors_t2)
@@ -546,7 +585,7 @@ for i, v in enumerate(corr["tier2_pass_rate"]):
     axes[1].text(v + 0.01, i, f"{v:.0%}", va="center",
                  fontsize=14, fontweight="bold")
 axes[1].set_xlim(0, 1.15)
-axes[1].set_title("Tier 2 — Strategic Decisions")
+axes[1].set_title("Tier 2 — Strategic Decision")
 axes[1].set_xlabel("Pass rate")
 
 # Group separator line between nostrat and yesstrat.
