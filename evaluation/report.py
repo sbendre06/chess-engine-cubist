@@ -9,6 +9,15 @@ from pathlib import Path
 
 
 ENGINES_DIR = Path("engines")
+EXPERIMENT_LOG_PATH = Path("experiment_log.csv")
+EXPERIMENT_LOG_FIELDS = [
+    "experiment_name",
+    "tokens_in",
+    "tokens_out",
+    "wall_time_minutes",
+    "interventions",
+    "engine_winrate",
+]
 
 
 @dataclass(slots=True)
@@ -95,3 +104,39 @@ def list_engines() -> list[str]:
             continue
         names.append(stem)
     return names
+
+
+def update_experiment_log_winrates(name_to_winrate: dict[str, float]) -> None:
+    """Update experiment_log.csv with each engine's winrate from a tournament.
+
+    For each (engine_name, winrate) pair: if a row exists, overwrite the
+    `engine_winrate` column. If not, append a new row with the winrate and
+    blank build-cost fields (operator can fill those in later via
+    log_experiment.py).
+    """
+    rows: list[dict] = []
+    if EXPERIMENT_LOG_PATH.exists():
+        with EXPERIMENT_LOG_PATH.open("r", newline="", encoding="utf-8") as handle:
+            rows = list(csv.DictReader(handle))
+
+    by_name = {r["experiment_name"]: r for r in rows}
+    for name, winrate in name_to_winrate.items():
+        wr_str = f"{winrate:.4f}"
+        if name in by_name:
+            by_name[name]["engine_winrate"] = wr_str
+        else:
+            rows.append(
+                {
+                    "experiment_name": name,
+                    "tokens_in": "",
+                    "tokens_out": "",
+                    "wall_time_minutes": "",
+                    "interventions": "",
+                    "engine_winrate": wr_str,
+                }
+            )
+
+    with EXPERIMENT_LOG_PATH.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=EXPERIMENT_LOG_FIELDS)
+        writer.writeheader()
+        writer.writerows(rows)
