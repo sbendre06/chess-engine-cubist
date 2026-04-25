@@ -13,6 +13,35 @@ No magic numbers scattered: centralize here after first implementation pass.
 
 from __future__ import annotations
 
-# Example placeholders (replace with real constants when implementing):
-# MATE_VALUE = ...
-# DEFAULT_EVAL_WEIGHTS = ...
+from dataclasses import dataclass
+
+ENGINE_NAME = "Cubist AntiChess"
+ENGINE_AUTHOR = "Cubist Hackathon Team"
+ENGINE_VERSION = "0.1.0"
+
+MATE_VALUE = 100_000
+DRAW_VALUE = 0
+INFINITY = 1_000_000
+
+# Ordering-centric values (not classical chess eval values).
+PIECE_ORDER_VALUE = {
+    "P": 100,
+    "N": 300,
+    "B": 320,
+    "R": 500,
+    "Q": 900,
+    "K": 1_200,
+}
+
+
+@dataclass(frozen=True)
+class EvalWeights:
+    material_delta: int = 12
+    piece_count_delta: int = 20
+    own_legal_moves: int = -2
+    opp_legal_moves: int = 2
+    own_capture_moves: int = -4
+    opp_capture_moves: int = 4
+
+
+DEFAULT_EVAL_WEIGHTS = EvalWeights()

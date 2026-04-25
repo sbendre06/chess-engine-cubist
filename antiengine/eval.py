@@ -31,14 +31,69 @@ Important:
 
 from __future__ import annotations
 
+from dataclasses import asdict, is_dataclass
+
+import chess
+
+from antiengine.constants import DEFAULT_EVAL_WEIGHTS, PIECE_ORDER_VALUE
+
+
+def _material_for_color(board: chess.Board, color: chess.Color) -> int:
+    total = 0
+    for piece in board.piece_map().values():
+        if piece.color == color:
+            total += PIECE_ORDER_VALUE[piece.symbol().upper()]
+    return total
+
+
+def _piece_count_for_color(board: chess.Board, color: chess.Color) -> int:
+    return sum(1 for piece in board.piece_map().values() if piece.color == color)
+
+
+def _legal_move_count_for_color(board: chess.Board, color: chess.Color) -> int:
+    probe = board.copy(stack=False)
+    probe.turn = color
+    return probe.legal_moves.count()
+
+
+def _capture_move_count_for_color(board: chess.Board, color: chess.Color) -> int:
+    probe = board.copy(stack=False)
+    probe.turn = color
+    return sum(1 for move in probe.legal_moves if probe.is_capture(move))
+
 
 class AntichessEvaluator:
     """Linear (or later non-linear) weighted feature evaluator."""
 
     def __init__(self, weights=None) -> None:
         """Load default weights from constants.py or passed tuning vector."""
-        ...
+        if weights is None:
+            self._weights = asdict(DEFAULT_EVAL_WEIGHTS)
+        elif is_dataclass(weights):
+            self._weights = asdict(weights)
+        else:
+            self._weights = dict(weights)
 
     def evaluate(self, board, *, ply: int = 0) -> int:
         """Return score from current side to move perspective."""
-        ...
+        side = board.turn
+        opp = not side
+
+        own_material = _material_for_color(board, side)
+        opp_material = _material_for_color(board, opp)
+        own_pieces = _piece_count_for_color(board, side)
+        opp_pieces = _piece_count_for_color(board, opp)
+
+        own_legal = _legal_move_count_for_color(board, side)
+        opp_legal = _legal_move_count_for_color(board, opp)
+        own_captures = _capture_move_count_for_color(board, side)
+        opp_captures = _capture_move_count_for_color(board, opp)
+
+        score = 0
+        score += self._weights["material_delta"] * (opp_material - own_material)
+        score += self._weights["piece_count_delta"] * (opp_pieces - own_pieces)
+        score += self._weights["own_legal_moves"] * own_legal
+        score += self._weights["opp_legal_moves"] * opp_legal
+        score += self._weights["own_capture_moves"] * own_captures
+        score += self._weights["opp_capture_moves"] * opp_captures
+        return int(score)

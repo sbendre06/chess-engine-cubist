@@ -7,5 +7,6 @@
 # - Evaluation (eval.py) + tuning/* feature library
 # - Optional Syzygy probing (tablebase.py)
 #
-# Import stable entry points here once implemented, e.g.:
-# from antiengine.engine import UCIEngine
+from antiengine.engine import UCIEngine
+
+__all__ = ["UCIEngine"]

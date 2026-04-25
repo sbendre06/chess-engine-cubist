@@ -21,24 +21,25 @@ from typing import Protocol
 @dataclass
 class SearchResult:
     """Outcome of a completed (or interrupted) search."""
-
-    # Fields to add when implementing, e.g.:
-    # depth_completed: int
-    # best_move_uci: str | None
-    # score_cp: int
-    # pv_uci: list[str]
-    # nodes: int
-    # elapsed_ms: float
-    # bound: str  # "exact" | "lower" | "upper" if surfacing TT
-    pass
+    depth_completed: int
+    best_move_uci: str | None
+    score_cp: int
+    pv_uci: list[str]
+    nodes: int
+    elapsed_ms: float
+    nps: int
+    stopped: bool = False
+    bound: str = "exact"
 
 
 @dataclass
 class SearchConfig:
     """Parameters controlling iterative deepening, time, and search features."""
-
-    # max_depth, movetime_ms, infinite, hash_mb, syzygy_path, qsearch_max_depth, ...
-    pass
+    max_depth: int = 4
+    movetime_ms: int | None = None
+    infinite: bool = False
+    nodes_limit: int | None = None
+    qsearch_max_depth: int = 8
 
 
 # --- Evaluator protocol ---
@@ -79,4 +80,8 @@ class UCIEngine(Protocol):
     """High-level object used by uci.py main loop."""
 
     def handle_command(self, line: str) -> None:
+        ...
+
+    @property
+    def quit_requested(self) -> bool:
         ...

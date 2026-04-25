@@ -25,6 +25,10 @@ Implementation notes:
 
 from __future__ import annotations
 
+import sys
+
+from antiengine.engine import UCIEngine
+
 
 def main() -> None:
     """
@@ -33,7 +37,14 @@ def main() -> None:
     - Construct UCIEngine (see engine.py) with board, search, eval, TT.
     - Run stdin loop until quit.
     """
-    ...
+    engine = UCIEngine()
+    for raw_line in sys.stdin:
+        line = raw_line.strip()
+        if not line:
+            continue
+        engine.handle_command(line)
+        if engine.quit_requested:
+            break
 
 
 if __name__ == "__main__":
